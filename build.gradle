@@ -1,0 +1,11 @@
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    // Optionally, add common configurations for all subprojects
+    // For example:
+    // apply plugin: 'java'
+}
