@@ -14,7 +14,7 @@ class AiApiShimmerTest {
     @AI(label = "Question", description = "Holds info about the question")
     class Question(
         @property:AI(label = "Question", description = "The question to be asked")
-        val text: String = "",
+        val question: String = "",
         @property:AI(label = "Context", description = "Who is asking the Question")
         val context: String = ""
     )
@@ -22,8 +22,8 @@ class AiApiShimmerTest {
     @Serializable
     @AI(label = "The Answer", description = "Holds the answer to the question.")
     class Answer(
-        @property:AI(label = "Answer", description = "The text field holding the answer.")
-        val text: String = ""
+        @property:AI(label = "Answer", description = "A resoundingly deep answer to the question")
+        val answer: String = ""
     )
 
     interface QuestionAPI {
@@ -46,12 +46,13 @@ class AiApiShimmerTest {
 
     @Test
     public fun testRealApi() {
-        val api = AiApiBuilder(QuestionAPI::class)
+        val answer = AiApiBuilder(QuestionAPI::class)
             .setAdapter(OpenAiAdapter())
-            .build();
+            .build()
+            .ask(Question("What is the greatest rodent?", "A curious student"))
+            .get()
 
-        val result = api.ask(Question("What is the meaning of life", "A curious student"))
-        val answer = result.get()
+        println(answer?.answer)
         assertNotNull(answer, "There is no answer for the shimmer")
     }
 }
