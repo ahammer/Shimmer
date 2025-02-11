@@ -19,7 +19,11 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0") // Check for latest version
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+    implementation("com.openai:openai-java:0.22.0")
+    // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-reflect
+    implementation 'org.jetbrains.kotlin:kotlin-reflect:2.1.10'
+
 }
 
 compileKotlin {

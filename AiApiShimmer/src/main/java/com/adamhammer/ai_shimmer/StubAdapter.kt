@@ -1,13 +1,8 @@
+import java.lang.reflect.Method
 import kotlin.reflect.KClass
 
 class StubAdapter<T : Any>() : ApiAdapter<T> {
-    override fun handleRequest(
-        metaData: Map<String, String>,
-        inputProperties: Map<String, String>,
-        resultSchema: String,
-        kClass: KClass<out Any>
-    ): T {
-        // Ensure T has a no-argument constructor.
-        return kClass.java.getDeclaredConstructor().newInstance() as T
+    override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
+        return resultClass.java.getDeclaredConstructor().newInstance()
     }
 }
