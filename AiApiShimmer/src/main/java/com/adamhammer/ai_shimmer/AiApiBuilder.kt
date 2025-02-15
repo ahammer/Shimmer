@@ -25,3 +25,5 @@ class AiApiBuilder<T : Any>(private val apiInterface: KClass<T>) {
         return apiInterface.java.cast(proxyInstance)
     }
 }
+
+annotation class Memorize(val label: String)

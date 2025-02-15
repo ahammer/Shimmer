@@ -1,6 +1,6 @@
 package com.adamhammer.ai_shimmer.adapters
 
-import ApiAdapter
+import BaseApiAdapter
 import com.adamhammer.ai_shimmer.MethodUtils
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -14,7 +14,7 @@ import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import java.lang.reflect.Method
 
-class OpenAiAdapter<T : Any>() : ApiAdapter<T> {
+class OpenAiAdapter<T : Any>() : BaseApiAdapter<T>() {
     // Read API key from the environment variable.
     private val apiKey: String = System.getenv("OPENAI_API_KEY")
         ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")

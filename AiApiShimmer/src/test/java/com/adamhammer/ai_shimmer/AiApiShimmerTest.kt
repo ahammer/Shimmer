@@ -2,47 +2,70 @@ package com.adamhammer.ai_shimmer
 
 import StubAdapter
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
 
+// Import Swagger/OpenAPI annotations
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.media.Content
+import org.junit.jupiter.api.Assertions.*
+
 class AiApiShimmerTest {
 
     @Serializable
-    @AI(label = "Question", description = "Holds info about the question")
+    @Schema(title = "Question", description = "Holds info about the question")
     class Question(
-        @property:AI(label = "Question", description = "The question to be asked")
+        @field:Schema(title = "Question", description = "The question to be asked")
         val question: String = "",
-        @property:AI(label = "Context", description = "Who is asking the Question")
+        @field:Schema(title = "Context", description = "Who is asking the Question")
         val context: String = ""
     )
 
     @Serializable
-    @AI(label = "The Answer", description = "Holds the answer to the question.")
+    @Schema(title = "The Answer", description = "Holds the answer to the question.")
     class Answer(
-        @property:AI(label = "Answer", description = "A resoundingly deep answer to the question")
+        @field:Schema(title = "Answer", description = "A resoundingly deep answer to the question", )
         val answer: String = ""
     )
 
     interface QuestionAPI {
-        @AI(label = "Ask", description = "Provide an in depth answer to this question, within the context")
+        @Operation(
+            summary = "Ask",
+            description = "Provide an in-depth answer to the question within its context."
+        )
+        @ApiResponse(
+            description = "The answer as a struct",
+            content = [Content(schema = Schema(implementation = Answer::class))]
+        )
         fun askStruct(
+            @Parameter(description = "The question and its context for the API call")
             question: Question?
         ): Future<Answer?>
 
-        @AI(label = "AskString", description = "Provide an in depth answer to this question, within the context")
+        @Operation(
+            summary = "AskString",
+            description = "Provide an in-depth answer to the question within its context, returning a string response."
+        )
+        @ApiResponse(
+            description = "The answer as a string",
+            content = [Content(schema = Schema(implementation = String::class))],
+        )
+        @Memorize("The last answer to the question.")
         fun askString(
+            @Parameter(description = "The question and its context for the API call")
             question: Question?
         ): Future<String?>
     }
 
     @Test
-    public fun testStubApi() {
+    fun testStubApi() {
         val api = AiApiBuilder(QuestionAPI::class)
             .setAdapter(StubAdapter())
-            .build();
+            .build()
 
         val result = api.askStruct(Question("What is the meaning of life", "A curious student"))
         val answer = result.get()
@@ -50,7 +73,7 @@ class AiApiShimmerTest {
     }
 
     @Test
-    public fun testJsonApi() {
+    fun testJsonApi() {
         val answer = AiApiBuilder(QuestionAPI::class)
             .setAdapter(OpenAiAdapter())
             .build()
@@ -62,14 +85,16 @@ class AiApiShimmerTest {
     }
 
     @Test
-    public fun testStringApi() {
+    fun testStringApi() {
+        val adapter = OpenAiAdapter<QuestionAPI>();
         val answer = AiApiBuilder(QuestionAPI::class)
-            .setAdapter(OpenAiAdapter())
+            .setAdapter(adapter)
             .build()
             .askString(Question("What is the greatest rodent?", "A small insect asks this question"))
             .get()
 
         println(answer)
         assertNotNull(answer, "There is no answer for the shimmer")
+        assertEquals(adapter.getMemoryMap().size, 1, "we should have one memory")
     }
 }

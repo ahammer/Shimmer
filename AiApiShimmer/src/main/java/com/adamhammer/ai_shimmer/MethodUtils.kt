@@ -12,26 +12,40 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 
+// Swagger/OpenAPI annotations
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+
 object MethodUtils {
 
     /**
-     * Inspects a java.lang.reflect.Method and builds a nicely indented description of
-     * the method’s name, its @AI annotation (if present), and for each parameter,
-     * prints its (optional) @AI metadata as well as recursively inspecting the parameter’s class.
+     * Inspects a [Method] and builds a nicely indented description of:
+     *  - The method’s name along with its Swagger @Operation metadata (if present)
+     *  - For each parameter, its @Parameter description (if present)
+     *  - And a recursive listing of each parameter’s properties using @Schema metadata.
      */
     fun buildMetaData(method: Method): String {
         val sb = StringBuilder()
 
-        // Process the method’s own @AI annotation, if available.
-        method.getAnnotation(AI::class.java)?.let { ai ->
-            sb.append("${ai.label}: ${ai.description}\n")
+        // Process the method’s @Operation annotation, if available.
+        method.getAnnotation(Operation::class.java)?.let { op ->
+            if (op.summary.isNotEmpty()) {
+                sb.append("Operation: ${op.summary}\n")
+            }
+            if (op.description.isNotEmpty()) {
+                sb.append("Description: ${op.description}\n")
+            }
         }
 
         // Process each parameter of the method.
         method.parameters.forEach { param ->
-            param.type.getAnnotation(AI::class.java)?.let { ai ->
-                sb.append("    ${param.type.simpleName}: ${ai.description}\n")
+            param.getAnnotation(Parameter::class.java)?.let { paramAnn ->
+                if (paramAnn.description.isNotEmpty()) {
+                    sb.append("    ${param.type.simpleName} parameter: ${paramAnn.description}\n")
+                }
             }
+            // Recursively process the parameter’s class.
             val kClass = param.type.kotlin
             sb.append(recursivelyProcessClass(kClass, indent = "    "))
         }
@@ -39,23 +53,27 @@ object MethodUtils {
     }
 
     /**
-     * Recursively inspects the given class’s properties. For each property that has an @AI annotation,
-     * it prints the property name along with its label and description. If the property’s type
-     * is itself a non-primitive (and non-String) class, it recurses.
+     * Recursively inspects the given class’s properties.
+     * For each property with a @Schema annotation, prints its title (or property name)
+     * and description. Properties without a @Schema annotation are marked as optional.
+     * If a property’s type is a non-primitive (and non-String) class, it recurses.
      */
     private fun recursivelyProcessClass(kClass: KClass<*>, indent: String): String {
         val sb = StringBuilder()
         kClass.declaredMemberProperties.forEach { prop ->
-            val annotations = prop.annotations
-            prop.findAnnotation<AI>()?.let { ai ->
-                sb.append("$indent ${prop.name}: ${ai.description}\n")
+            // Check for @Schema on the property.
+            val schema = prop.findAnnotation<Schema>()
+            if (schema != null) {
+                val title = if (schema.title.isNotEmpty()) schema.title else prop.name
+                val description = if (schema.description.isNotEmpty()) schema.description else "optional"
+                sb.append("$indent$title: $description\n")
+            } else {
+                sb.append("$indent${prop.name}: (optional)\n")
             }
 
-            // Determine if the property’s type is a Kotlin class.
+            // Recurse into property types that are Kotlin classes (skip primitives and String).
             val propClass = prop.returnType.classifier as? KClass<*>
-            // Skip primitives and common types (to avoid endless recursion)
             if (propClass != null && !propClass.java.isPrimitive && propClass != String::class) {
-                // Recurse a level deeper.
                 sb.append(recursivelyProcessClass(propClass, indent + "  "))
             }
         }
@@ -63,54 +81,60 @@ object MethodUtils {
     }
 
     /**
-     * Generates a JSON “schema” for the given Kotlin class. This schema includes the class name
-     * and a mapping of field names to their descriptions (as provided in the @AI annotation on each property).
+     * Generates a JSON “schema” for the given Kotlin class. This schema includes a mapping of field names
+     * to their descriptions (as provided in the @Schema annotation on each property). Fields without a
+     * @Schema annotation are marked as optional.
      *
-     * The JSON output might look like:
+     * Example output:
      *
      * {
-     *    "class": "Question",
-     *    "fields": {
-     *         "text": "The question to be asked",
-     *         "context": "Who is asking the Question"
-     *    }
+     *    "text": "The question to be asked",
+     *    "context": "Who is asking the Question"
      * }
      */
     fun buildSchema(kClass: KClass<*>): String {
         if (kClass == String::class) {
             return "Respond with text"
         }
+
         val fieldsObject = buildJsonObject {
             kClass.declaredMemberProperties.forEach { prop ->
-                // Use the description from @AI if available.
-                val description = prop.findAnnotation<AI>()?.description ?: ""
+                val description = prop.findAnnotation<Schema>()?.description ?: "optional"
                 put(prop.name, description)
             }
         }
 
-        // Return the JSON as a pretty-printed string.
         return Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), fieldsObject)
     }
 
+    /**
+     * Iterates over the provided arguments and attempts to JSON-encode each one.
+     * If the argument’s class has a @Schema annotation, its title is used as a label.
+     * Otherwise, the class simple name is used. Fields that cannot be encoded
+     * return an error message.
+     */
     @OptIn(InternalSerializationApi::class)
     fun buildParameterData(args: Array<out Any>?): String {
         val sb = StringBuilder()
         val json = Json { prettyPrint = true }
 
         args?.forEach { arg ->
-            arg.javaClass.getAnnotation(AI::class.java)?.let { ai ->
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    // Get the serializer for the runtime type and cast it to KSerializer<Any>
-                    val serializer = arg::class.serializer() as KSerializer<Any>
-                    val jsonEncoded = json.encodeToString(serializer, arg)
-                    sb.append("${ai.label} = $jsonEncoded\n")
-                } catch (e: Exception) {
-                    sb.append("${ai.label} = (error encoding to JSON: ${e.message})\n")
-                }
+            // Check for @Schema annotation on the argument's class.
+            val schema = arg.javaClass.getAnnotation(Schema::class.java)
+            val label = if (schema != null && schema.title.isNotEmpty())
+                schema.title
+            else
+                arg::class.simpleName ?: "Unknown"
+
+            try {
+                @Suppress("UNCHECKED_CAST")
+                val serializer = arg::class.serializer() as KSerializer<Any>
+                val jsonEncoded = json.encodeToString(serializer, arg)
+                sb.append("$label = $jsonEncoded\n")
+            } catch (e: Exception) {
+                sb.append("$label = (error encoding to JSON: ${e.message})\n")
             }
         }
         return sb.toString()
     }
-
 }
