@@ -35,15 +35,15 @@ class OpenAiAdapter<T : Any>() : ApiAdapter<T> {
         val inputs = MethodUtils.buildParameterData(args)
 
         val prompt = """
-            Given the following metadata:
-            $metaData
-            
-            And these input values:
-            $inputs
-            
-            Please provide a result in valid JSON format that adheres to the following JSON schema:
-            $resultSchema
-        """.trimIndent()
+        Given the following metadata:
+        $metaData
+        
+        And these input values:
+        $inputs
+                
+        Output Format:
+        $resultSchema
+    """.trimIndent()
 
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
@@ -56,7 +56,13 @@ class OpenAiAdapter<T : Any>() : ApiAdapter<T> {
         val completionText = chatCompletion.choices().firstOrNull()?.message()?.content()?.get()?.trim()
             ?: throw RuntimeException("No response from OpenAI API")
 
-        // Extract the JSON block (in case extra text is included).
+        // If the expected result type is String, return the raw response directly.
+        if (resultClass == String::class) {
+            @Suppress("UNCHECKED_CAST")
+            return completionText as R
+        }
+
+        // Otherwise, extract the JSON block (in case extra text is included).
         val jsonResponse = extractJson(completionText)
 
         // Deserialize the JSON into the expected result type.
@@ -68,6 +74,7 @@ class OpenAiAdapter<T : Any>() : ApiAdapter<T> {
             throw RuntimeException("Failed to deserialize JSON response: ${e.message}", e)
         }
     }
+
 
     // Helper function to extract JSON from a response that might contain extra text.
     private fun extractJson(text: String): String {

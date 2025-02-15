@@ -27,10 +27,15 @@ class AiApiShimmerTest {
     )
 
     interface QuestionAPI {
-        @AI(label = "Ask", description = "Ask a funny Question")
-        fun ask(
+        @AI(label = "Ask", description = "Provide an in depth answer to this question, within the context")
+        fun askStruct(
             question: Question?
         ): Future<Answer?>
+
+        @AI(label = "AskString", description = "Provide an in depth answer to this question, within the context")
+        fun askString(
+            question: Question?
+        ): Future<String?>
     }
 
     @Test
@@ -39,20 +44,32 @@ class AiApiShimmerTest {
             .setAdapter(StubAdapter())
             .build();
 
-        val result = api.ask(Question("What is the meaning of life", "A curious student"))
+        val result = api.askStruct(Question("What is the meaning of life", "A curious student"))
         val answer = result.get()
         assertNotNull(answer, "There is no answer for the shimmer")
     }
 
     @Test
-    public fun testRealApi() {
+    public fun testJsonApi() {
         val answer = AiApiBuilder(QuestionAPI::class)
             .setAdapter(OpenAiAdapter())
             .build()
-            .ask(Question("What is the greatest rodent?", "A curious student"))
+            .askStruct(Question("What is the greatest rodent?", "A small insect asks this question"))
             .get()
 
         println(answer?.answer)
+        assertNotNull(answer, "There is no answer for the shimmer")
+    }
+
+    @Test
+    public fun testStringApi() {
+        val answer = AiApiBuilder(QuestionAPI::class)
+            .setAdapter(OpenAiAdapter())
+            .build()
+            .askString(Question("What is the greatest rodent?", "A small insect asks this question"))
+            .get()
+
+        println(answer)
         assertNotNull(answer, "There is no answer for the shimmer")
     }
 }

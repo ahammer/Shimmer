@@ -77,6 +77,9 @@ object MethodUtils {
      * }
      */
     fun buildSchema(kClass: KClass<*>): String {
+        if (kClass == String::class) {
+            return "Respond with text"
+        }
         val fieldsObject = buildJsonObject {
             kClass.declaredMemberProperties.forEach { prop ->
                 // Use the description from @AI if available.
