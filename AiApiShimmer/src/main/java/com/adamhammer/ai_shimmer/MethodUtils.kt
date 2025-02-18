@@ -1,140 +1,161 @@
+@file:OptIn(InternalSerializationApi::class)
+
 package com.adamhammer.ai_shimmer
 
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.KSerializer
-import java.lang.reflect.Method
-import kotlin.reflect.KClass
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.full.findAnnotation
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.serializer
-
-// Swagger/OpenAPI annotations
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.*
+import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.full.findAnnotation
+import java.lang.reflect.Method
 
 object MethodUtils {
 
-    /**
-     * Inspects a [Method] and builds a nicely indented description of:
-     *  - The method’s name along with its Swagger @Operation metadata (if present)
-     *  - For each parameter, its @Parameter description (if present)
-     *  - And a recursive listing of each parameter’s properties using @Schema metadata.
-     */
-    fun buildMetaData(method: Method): String {
-        val sb = StringBuilder()
-
-        // Process the method’s @Operation annotation, if available.
-        method.getAnnotation(Operation::class.java)?.let { op ->
-            if (op.summary.isNotEmpty()) {
-                sb.append("Operation: ${op.summary}\n")
-            }
-            if (op.description.isNotEmpty()) {
-                sb.append("Description: ${op.description}\n")
-            }
-        }
-
-        // Process each parameter of the method.
-        method.parameters.forEach { param ->
-            param.getAnnotation(Parameter::class.java)?.let { paramAnn ->
-                if (paramAnn.description.isNotEmpty()) {
-                    sb.append("    ${param.type.simpleName} parameter: ${paramAnn.description}\n")
-                }
-            }
-            // Recursively process the parameter’s class.
-            val kClass = param.type.kotlin
-            sb.append(recursivelyProcessClass(kClass, indent = "    "))
-        }
-        return sb.toString()
-    }
+    // Create a shared Json instance.
+    private val json = Json { prettyPrint = true }
 
     /**
-     * Recursively inspects the given class’s properties.
-     * For each property with a @Schema annotation, prints its title (or property name)
-     * and description. Properties without a @Schema annotation are marked as optional.
-     * If a property’s type is a non-primitive (and non-String) class, it recurses.
-     */
-    private fun recursivelyProcessClass(kClass: KClass<*>, indent: String): String {
-        val sb = StringBuilder()
-        kClass.declaredMemberProperties.forEach { prop ->
-            // Check for @Schema on the property.
-            val schema = prop.findAnnotation<Schema>()
-            if (schema != null) {
-                val title = if (schema.title.isNotEmpty()) schema.title else prop.name
-                val description = if (schema.description.isNotEmpty()) schema.description else "optional"
-                sb.append("$indent$title: $description\n")
-            } else {
-                sb.append("$indent${prop.name}: (optional)\n")
-            }
-
-            // Recurse into property types that are Kotlin classes (skip primitives and String).
-            val propClass = prop.returnType.classifier as? KClass<*>
-            if (propClass != null && !propClass.java.isPrimitive && propClass != String::class) {
-                sb.append(recursivelyProcessClass(propClass, indent + "  "))
-            }
-        }
-        return sb.toString()
-    }
-
-    /**
-     * Generates a JSON “schema” for the given Kotlin class. This schema includes a mapping of field names
-     * to their descriptions (as provided in the @Schema annotation on each property). Fields without a
-     * @Schema annotation are marked as optional.
-     *
-     * Example output:
-     *
-     * {
-     *    "text": "The question to be asked",
-     *    "context": "Who is asking the Question"
-     * }
+     * Public entry point to build a JSON schema as a pretty-printed string.
      */
     fun buildSchema(kClass: KClass<*>): String {
-        if (kClass == String::class) {
-            return "Respond with text"
+        return when {
+            kClass == String::class -> "\"Respond with text\""
+            kClass.java.isEnum -> json.encodeToString(JsonObject.serializer(), buildEnumSchema(kClass))
+            else -> json.encodeToString(JsonObject.serializer(), buildClassSchema(kClass))
         }
-
-        val fieldsObject = buildJsonObject {
-            kClass.declaredMemberProperties.forEach { prop ->
-                val description = prop.findAnnotation<Schema>()?.description ?: "optional"
-                put(prop.name, description)
-            }
-        }
-
-        return Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), fieldsObject)
     }
 
     /**
-     * Iterates over the provided arguments and attempts to JSON-encode each one.
-     * If the argument’s class has a @Schema annotation, its title is used as a label.
-     * Otherwise, the class simple name is used. Fields that cannot be encoded
-     * return an error message.
+     * Returns a JSON object representing the schema of an enum.
      */
-    @OptIn(InternalSerializationApi::class)
-    fun buildParameterData(args: Array<out Any>?): String {
-        val sb = StringBuilder()
-        val json = Json { prettyPrint = true }
+    private fun buildEnumSchema(kClass: KClass<*>): JsonObject {
+        val enumValues = kClass.java.enumConstants.map { it.toString() }
+        return buildJsonObject {
+            put("enum", json.encodeToJsonElement(enumValues))
+        }
+    }
 
-        args?.forEach { arg ->
-            // Check for @Schema annotation on the argument's class.
-            val schema = arg.javaClass.getAnnotation(Schema::class.java)
-            val label = if (schema != null && schema.title.isNotEmpty())
-                schema.title
-            else
-                arg::class.simpleName ?: "Unknown"
-
-            try {
-                @Suppress("UNCHECKED_CAST")
-                val serializer = arg::class.serializer() as KSerializer<Any>
-                val jsonEncoded = json.encodeToString(serializer, arg)
-                sb.append("$label = $jsonEncoded\n")
-            } catch (e: Exception) {
-                sb.append("$label = (error encoding to JSON: ${e.message})\n")
+    /**
+     * Recursively builds a JSON object for a non-enum class by inspecting its declared properties.
+     * If a property is an enum, its possible values are included.
+     */
+    private fun buildClassSchema(kClass: KClass<*>): JsonObject {
+        return buildJsonObject {
+            kClass.declaredMemberProperties.forEach { prop ->
+                val description = prop.findAnnotation<Schema>()?.description ?: "optional"
+                val propKClass = prop.returnType.classifier as? KClass<*>
+                val propSchema = if (propKClass != null && propKClass.java.isEnum) {
+                    buildJsonObject {
+                        put("description", description)
+                        put("enum", json.encodeToJsonElement(propKClass.java.enumConstants.map { it.toString() }))
+                    }
+                } else {
+                    buildJsonObject {
+                        put("description", description)
+                        put("schema", buildSchema(propKClass ?: String::class))
+                    }
+                }
+                put(prop.name, propSchema)
             }
         }
-        return sb.toString()
+    }
+
+    /**
+     * Generates a SerializableRequest by extracting method and parameter metadata.
+     */
+    @OptIn(InternalSerializationApi::class)
+    fun generateSerializableRequest(method: Method, args: Array<out Any>?): SerializableRequest {
+        val methodField = buildMethodField(method)
+        val parametersList = method.parameters.mapIndexed { index, param ->
+            buildParameterMap(param, index, args)
+        }
+        val memoryMap = buildMemoryMap(method)
+        val resultSchema = buildResultSchema(method)
+
+        return SerializableRequest(
+            method = methodField,
+            parameters = parametersList,
+            memory = memoryMap,
+            resultSchema = resultSchema
+        )
+    }
+
+    /**
+     * Builds a string representation of the method name along with its Operation summary and description.
+     */
+    private fun buildMethodField(method: Method): String {
+        val op = method.getAnnotation(Operation::class.java)
+        val builder = StringBuilder(method.name)
+        op?.let {
+            if (it.summary.isNotEmpty()) builder.append(" - Summary: ${it.summary}")
+            if (it.description.isNotEmpty()) builder.append(" - Description: ${it.description}")
+        }
+        return builder.toString()
+    }
+
+    /**
+     * Builds a map representing a method parameter's metadata and its encoded value.
+     */
+    private fun buildParameterMap(param: java.lang.reflect.Parameter, index: Int, args: Array<out Any>?): Map<String, String> {
+        val paramMap = mutableMapOf<String, String>()
+        paramMap["type"] = param.type.simpleName
+        val paramAnn = param.getAnnotation(Parameter::class.java)
+        paramMap["description"] = paramAnn?.description ?: "optional"
+
+        val paramKClass = param.type.kotlin
+        paramMap["schema"] = if (paramKClass == String::class) {
+            "Respond with text"
+        } else {
+            buildSchema(paramKClass)
+        }
+        paramMap["value"] = encodeArgumentValue(if (args != null && index < args.size) args[index] else null)
+        return paramMap
+    }
+
+    /**
+     * Encodes the provided argument to its JSON string representation using kotlinx.serialization.
+     */
+    private fun encodeArgumentValue(arg: Any?): String {
+        return if (arg == null) {
+            "null"
+        } else {
+            try {
+                val serializer: KSerializer<Any> = arg::class.serializer() as KSerializer<Any>
+                json.encodeToString(serializer, arg)
+            } catch (e: Exception) {
+                "(error encoding to JSON: ${e.message})"
+            }
+        }
+    }
+
+    /**
+     * Extracts memory information if the method is annotated with @Memorize.
+     */
+    private fun buildMemoryMap(method: Method): Map<String, String> {
+        val memorizeAnn = method.getAnnotation(Memorize::class.java)
+        return if (memorizeAnn != null) {
+            mapOf("memorize" to memorizeAnn.label)
+        } else {
+            emptyMap()
+        }
+    }
+
+    /**
+     * Builds the result schema based on the method's ApiResponse annotation or its return type.
+     */
+    private fun buildResultSchema(method: Method): String {
+        val apiResponse = method.getAnnotation(ApiResponse::class.java)
+        return if (apiResponse != null && apiResponse.content.isNotEmpty()) {
+            val schemaAnn = apiResponse.content[0].schema
+            buildSchema(schemaAnn.implementation)
+        } else {
+            buildSchema(method.returnType.kotlin)
+        }
     }
 }

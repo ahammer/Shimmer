@@ -30,20 +30,14 @@ class OpenAiAdapter<T : Any>() : BaseApiAdapter<T>() {
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
-        val metaData = MethodUtils.buildMetaData(method)
         val resultSchema = MethodUtils.buildSchema(resultClass)
-        val inputs = MethodUtils.buildParameterData(args)
-
-        val prompt = """
-        Given the following metadata:
-        $metaData
-        
-        And these input values:
-        $inputs
-                
-        Output Format:
-        $resultSchema
-    """.trimIndent()
+        val inputs = MethodUtils.generateSerializableRequest(method, args)
+        val jsonContent = json.encodeToString(inputs);
+        val prompt = """!!! Execute this method and return the filled output template !!!
+            # METHOD
+            $jsonContent
+            # BEGIN OUTPUT TEMPLATE
+            $resultSchema""".trimIndent()
 
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()

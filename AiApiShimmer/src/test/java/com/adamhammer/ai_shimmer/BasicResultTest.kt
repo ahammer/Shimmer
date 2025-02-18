@@ -37,10 +37,12 @@ class AiApiShimmerTest {
             summary = "Ask",
             description = "Provide an in-depth answer to the question within its context."
         )
+
         @ApiResponse(
             description = "The answer as a struct",
             content = [Content(schema = Schema(implementation = Answer::class))]
         )
+
         fun askStruct(
             @Parameter(description = "The question and its context for the API call")
             question: Question?
@@ -50,10 +52,12 @@ class AiApiShimmerTest {
             summary = "AskString",
             description = "Provide an in-depth answer to the question within its context, returning a string response."
         )
+
         @ApiResponse(
             description = "The answer as a string",
             content = [Content(schema = Schema(implementation = String::class))],
         )
+
         @Memorize("The last answer to the question.")
         fun askString(
             @Parameter(description = "The question and its context for the API call")
