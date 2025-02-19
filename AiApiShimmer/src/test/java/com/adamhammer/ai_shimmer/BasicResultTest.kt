@@ -1,7 +1,8 @@
 package com.adamhammer.ai_shimmer
 
-import StubAdapter
+import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
+import com.adamhammer.ai_shimmer.interfaces.Memorize
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
@@ -67,7 +68,7 @@ class AiApiShimmerTest {
 
     @Test
     fun testStubApi() {
-        val api = AiApiBuilder(QuestionAPI::class)
+        val api = ShimmerBuilder(QuestionAPI::class)
             .setAdapter(StubAdapter())
             .build()
 
@@ -78,7 +79,7 @@ class AiApiShimmerTest {
 
     @Test
     fun testJsonApi() {
-        val answer = AiApiBuilder(QuestionAPI::class)
+        val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapter(OpenAiAdapter())
             .build()
             .askStruct(Question("What is the greatest rodent?", "A small insect asks this question"))
@@ -91,7 +92,7 @@ class AiApiShimmerTest {
     @Test
     fun testStringApi() {
         val adapter = OpenAiAdapter<QuestionAPI>();
-        val answer = AiApiBuilder(QuestionAPI::class)
+        val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapter(adapter)
             .build()
             .askString(Question("What is the greatest rodent?", "A small insect asks this question"))

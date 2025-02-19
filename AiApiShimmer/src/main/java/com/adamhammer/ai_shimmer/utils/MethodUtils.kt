@@ -1,7 +1,10 @@
 @file:OptIn(InternalSerializationApi::class)
 
-package com.adamhammer.ai_shimmer
+package com.adamhammer.ai_shimmer.utils
 
+
+import com.adamhammer.ai_shimmer.interfaces.Memorize
+import com.adamhammer.ai_shimmer.interfaces.SerializableRequest
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -70,12 +73,11 @@ object MethodUtils {
      * Generates a SerializableRequest by extracting method and parameter metadata.
      */
     @OptIn(InternalSerializationApi::class)
-    fun generateSerializableRequest(method: Method, args: Array<out Any>?): SerializableRequest {
+    fun generateSerializableRequest(method: Method, args: Array<out Any>?, memoryMap: MutableMap<String, String>): SerializableRequest {
         val methodField = buildMethodField(method)
         val parametersList = method.parameters.mapIndexed { index, param ->
             buildParameterMap(param, index, args)
         }
-        val memoryMap = buildMemoryMap(method)
         val resultSchema = buildResultSchema(method)
 
         return SerializableRequest(
@@ -104,16 +106,8 @@ object MethodUtils {
      */
     private fun buildParameterMap(param: java.lang.reflect.Parameter, index: Int, args: Array<out Any>?): Map<String, String> {
         val paramMap = mutableMapOf<String, String>()
-        paramMap["type"] = param.type.simpleName
         val paramAnn = param.getAnnotation(Parameter::class.java)
-        paramMap["description"] = paramAnn?.description ?: "optional"
-
-        val paramKClass = param.type.kotlin
-        paramMap["schema"] = if (paramKClass == String::class) {
-            "Respond with text"
-        } else {
-            buildSchema(paramKClass)
-        }
+        paramMap["description"] = paramAnn?.description ?: ""
         paramMap["value"] = encodeArgumentValue(if (args != null && index < args.size) args[index] else null)
         return paramMap
     }

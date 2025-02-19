@@ -1,13 +1,13 @@
-import com.adamhammer.ai_shimmer.Memorize
+import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
+import com.adamhammer.ai_shimmer.interfaces.Memorize
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
-import kotlin.reflect.KClass
 
 // The invocation handler.
-internal class ApiInvocationHandler<T>(
+internal class Shimmer<T>(
     private val adapter: ApiAdapter<T>
 ) : InvocationHandler {
 
@@ -35,7 +35,7 @@ internal class ApiInvocationHandler<T>(
 
                 // If the method is annotated with @Memorize, store the result.
                 if (memorizeKey != null) {
-                    adapter.getMemoryMap()[memorizeKey] = result
+                    adapter.getMemoryMap()[memorizeKey] = result.toString()
                 }
                 result
             } else {

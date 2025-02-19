@@ -1,7 +1,7 @@
 package com.adamhammer.ai_shimmer.adapters
 
 import BaseApiAdapter
-import com.adamhammer.ai_shimmer.MethodUtils
+import com.adamhammer.ai_shimmer.utils.MethodUtils
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
@@ -14,7 +14,7 @@ import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import java.lang.reflect.Method
 
-class OpenAiAdapter<T : Any>() : BaseApiAdapter<T>() {
+public class OpenAiAdapter<T : Any>() : BaseApiAdapter<T>() {
     // Read API key from the environment variable.
     private val apiKey: String = System.getenv("OPENAI_API_KEY")
         ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")
@@ -31,9 +31,13 @@ class OpenAiAdapter<T : Any>() : BaseApiAdapter<T>() {
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
         val resultSchema = MethodUtils.buildSchema(resultClass)
-        val inputs = MethodUtils.generateSerializableRequest(method, args)
+        val inputs = MethodUtils.generateSerializableRequest(method, args, getMemoryMap())
         val jsonContent = json.encodeToString(inputs);
         val prompt = """!!! Execute this method and return the filled output template !!!
+            The MetaData provides information about the method call, it's parameters, output and schema.
+            Focus on the user-data/inputs when solving the problem.
+            
+            Memory provided is the result of past-steps, use it to help guide you.
             # METHOD
             $jsonContent
             # BEGIN OUTPUT TEMPLATE

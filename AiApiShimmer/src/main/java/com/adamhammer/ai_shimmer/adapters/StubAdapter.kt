@@ -1,4 +1,9 @@
+package com.adamhammer.ai_shimmer.adapters
+
+import BaseApiAdapter
+import com.adamhammer.ai_shimmer.interfaces.AiDecision
 import java.lang.reflect.Method
+import java.util.concurrent.Future
 import kotlin.reflect.KClass
 
 class StubAdapter<T : Any> : BaseApiAdapter<T>() {

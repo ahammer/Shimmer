@@ -1,7 +1,7 @@
 package com.adamhammer.ai_shimmer
 
-import StubAdapter
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
+import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
@@ -85,7 +85,7 @@ class HigherCardApiTest {
 
     @Test
     fun testDrawHigherCardDefined() {
-        val api = AiApiBuilder(HigherCardAPI::class)
+        val api = ShimmerBuilder(HigherCardAPI::class)
             .setAdapter(OpenAiAdapter())
             .build()
 
@@ -99,7 +99,7 @@ class HigherCardApiTest {
 
     @Test
     fun testDrawHigherCardUndefined() {
-        val api = AiApiBuilder(HigherCardAPI::class)
+        val api = ShimmerBuilder(HigherCardAPI::class)
             .setAdapter(StubAdapter())
             .build()
 
