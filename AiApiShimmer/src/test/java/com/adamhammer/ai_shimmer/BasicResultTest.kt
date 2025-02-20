@@ -91,7 +91,7 @@ class AiApiShimmerTest {
 
     @Test
     fun testStringApi() {
-        val adapter = OpenAiAdapter<QuestionAPI>();
+        val adapter = OpenAiAdapter()
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapter(adapter)
             .build()

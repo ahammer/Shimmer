@@ -9,9 +9,9 @@ import kotlin.reflect.KClass
 // Builder for an AI Shimmer for an interface specification.
 // Binds the Interface -> AI Adapter.
 class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
-    private var adapter: ApiAdapter<T>? = null
+    private var adapter: ApiAdapter? = null
 
-    fun setAdapter(adapter: ApiAdapter<T>): ShimmerBuilder<T> {
+    fun setAdapter(adapter: ApiAdapter): ShimmerBuilder<T> {
         this.adapter = adapter
         return this
     }

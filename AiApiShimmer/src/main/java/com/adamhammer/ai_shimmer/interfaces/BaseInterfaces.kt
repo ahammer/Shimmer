@@ -27,33 +27,6 @@ interface Decider {
     fun decideNextAction(): Future<AiDecision>
 }
 
-/**
- * Interface for handling AI speech output.
- */
-interface AiSpeak {
-    /**
-     * Registers a speech action.
-     *
-     * @param key A unique identifier for the speech function.
-     * @param description A brief description of the speech function.
-     * @param function A callback function that processes a [String] input.
-     */
-    fun add(key: String, description: String, function: (String) -> Unit)
-}
-
-/**
- * Interface for handling AI listening or input.
- */
-interface AiListen {
-    /**
-     * Registers an input listener.
-     *
-     * @param key A unique identifier for the listener.
-     * @param description A brief description of what the listener does.
-     * @param input The input string that will be processed.
-     */
-    fun add(key: String, description: String, input: String)
-}
 
 /**
  * Interface for executing actions determined by the AI.
@@ -70,4 +43,4 @@ interface DecisionRunner {
 /**
  * Combines all the core AI interfaces into one.
  */
-interface BaseInterfaces : Decider, AiSpeak, AiListen, DecisionRunner
+interface BaseInterfaces : Decider, DecisionRunner

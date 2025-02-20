@@ -152,4 +152,52 @@ object MethodUtils {
             buildSchema(method.returnType.kotlin)
         }
     }
+
+
+    /**
+     * Parses the provided object for decision schema.
+     *
+     * This method introspects the object's class, extracts metadata about its methods and properties,
+     * and returns a JSON string representing the object's capabilities, including method signatures,
+     * associated annotations (such as Operation, Parameter, and ApiResponse), and a schema of the object's type.
+     */
+    fun parseObjectForDecisionSchema(obj: Any): String {
+        val kClass = obj::class
+        // Exclude methods inherited from Any.
+        val methods = kClass.java.methods.filter { it.declaringClass != Any::class.java }
+        val methodsJson = methods.map { method ->
+            buildJsonObject {
+                put("name", method.name)
+                // Include Operation annotation details if present.
+                method.getAnnotation(Operation::class.java)?.let { op ->
+                    put("summary", op.summary)
+                    put("description", op.description)
+                }
+                // Include details of the parameters.
+                val paramsJson = buildJsonArray {
+                    method.parameters.forEach { param ->
+                        add(buildJsonObject {
+                            put("name", param.name)
+                            put("type", param.type.kotlin.qualifiedName ?: param.type.simpleName)
+                            val paramAnn = param.getAnnotation(Parameter::class.java)
+                            put("description", paramAnn?.description ?: "")
+                        })
+                    }
+                }
+                put("parameters", paramsJson)
+                // Include the result schema.
+                put("resultSchema", buildResultSchema(method))
+                // Include memorize annotation if present.
+                method.getAnnotation(Memorize::class.java)?.let { memorizeAnn ->
+                    put("memorize", memorizeAnn.label)
+                }
+            }
+        }
+        val snapshot = buildJsonObject {
+            put("className", kClass.qualifiedName ?: kClass.simpleName ?: "Unknown")
+            put("schema", buildSchema(kClass))
+            put("methods", JsonArray(methodsJson))
+        }
+        return json.encodeToString(JsonObject.serializer(), snapshot)
+    }
 }

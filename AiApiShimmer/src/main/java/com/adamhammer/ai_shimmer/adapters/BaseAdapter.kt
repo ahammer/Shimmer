@@ -1,18 +1,20 @@
+import com.adamhammer.ai_shimmer.ShimmerBuilder
+import com.adamhammer.ai_shimmer.agents.DecidingAgent
+import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
 import com.adamhammer.ai_shimmer.interfaces.AiDecision
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.util.concurrent.Future
 
-abstract class BaseApiAdapter<T>: ApiAdapter<T> {
+abstract class BaseApiAdapter: ApiAdapter {
+
+    private val decidingAgent by lazy {
+        DecidingAgent(api = ShimmerBuilder(DecidingAgentAPI::class)
+            .setAdapter(this)
+            .build())
+    }
+
     override fun decideNextAction(): Future<AiDecision> {
-        TODO("Not yet implemented")
-    }
-
-    override fun add(key: String, description: String, function: (String) -> Unit) {
-        TODO("Not yet implemented")
-    }
-
-    override fun add(key: String, description: String, input: String) {
-        TODO("Not yet implemented")
+        return decidingAgent.decideNext(this)
     }
 
     override fun runAction(decision: AiDecision) {

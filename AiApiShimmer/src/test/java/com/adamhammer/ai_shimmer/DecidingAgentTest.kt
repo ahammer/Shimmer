@@ -24,10 +24,9 @@ interface AutonomousAIApi : BaseInterfaces {
 // The BasicAgent class that exposes only the ideate method.
 // It accepts a BasicAIApi instance (built with AiApiBuilder) in its constructor.
 class AutonomousAgent(private val api: AutonomousAIApi) {
-
-    fun iterate() {
-        val next = api.decideNextAction()
-        runNextAction(api)
+    fun step() : Future<AiDecision> {
+        return api.decideNextAction()
+        // next.execute(this or something)
     }
 }
 
@@ -42,10 +41,10 @@ class DecidingAgentTest {
             .build()
 
         val agent = AutonomousAgent(api)
-        for (i in 1..10) {
-            agent.iterate()
-        }
-
+        val r1 = agent.step().get()
+        val r2 = agent.step().get()
+        print (r1);
+        print (r2);
 
     }
 }
