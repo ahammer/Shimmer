@@ -1,6 +1,7 @@
 package com.adamhammer.ai_shimmer
 
 
+import BaseApiAdapter
 import Shimmer
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.lang.reflect.Proxy
@@ -11,10 +12,18 @@ import kotlin.reflect.KClass
 class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     private var adapter: ApiAdapter? = null
 
-    fun setAdapter(adapter: ApiAdapter): ShimmerBuilder<T> {
+    fun <U : ApiAdapter> setAdapterClass(adapterClass: KClass<U>): ShimmerBuilder<T> {
+        this.adapter = adapterClass.constructors
+            .first { it.parameters.size == 1 }
+            .call(apiInterface)
+        return this
+    }
+
+    fun setAdapterDirect(adapter: ApiAdapter): ShimmerBuilder<T> {
         this.adapter = adapter
         return this
     }
+
 
     fun build(): T {
         if (adapter == null) {
@@ -23,7 +32,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         val proxyInstance = Proxy.newProxyInstance(
             apiInterface.java.classLoader,
             arrayOf(apiInterface.java),
-            Shimmer(adapter!!)
+            Shimmer<T>(adapter!!, apiInterface)
         )
         return apiInterface.java.cast(proxyInstance)
     }

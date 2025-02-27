@@ -37,7 +37,7 @@ class DecidingAgentTest {
     fun testIdeate() {
 
         val api = ShimmerBuilder(AutonomousAIApi::class)
-            .setAdapter(OpenAiAdapter())
+            .setAdapterClass(OpenAiAdapter::class)
             .build()
 
         val agent = AutonomousAgent(api)

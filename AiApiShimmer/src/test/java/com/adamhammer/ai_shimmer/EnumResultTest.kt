@@ -86,7 +86,7 @@ class HigherCardApiTest {
     @Test
     fun testDrawHigherCardDefined() {
         val api = ShimmerBuilder(HigherCardAPI::class)
-            .setAdapter(OpenAiAdapter())
+            .setAdapterClass(OpenAiAdapter::class)
             .build()
 
         // Simulate a scenario where a higher card is available.
@@ -100,7 +100,7 @@ class HigherCardApiTest {
     @Test
     fun testDrawHigherCardUndefined() {
         val api = ShimmerBuilder(HigherCardAPI::class)
-            .setAdapter(StubAdapter())
+            .setAdapterClass(OpenAiAdapter::class)
             .build()
 
         // Simulate a scenario where no higher card is available (e.g., highest card provided).

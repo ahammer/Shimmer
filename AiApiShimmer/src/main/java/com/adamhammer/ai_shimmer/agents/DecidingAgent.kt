@@ -1,6 +1,7 @@
 package com.adamhammer.ai_shimmer.agents
 
 import com.adamhammer.ai_shimmer.interfaces.AiDecision
+import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.utils.MethodUtils
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -25,7 +26,7 @@ interface DecidingAgentAPI {
 }
 
 class DecidingAgent(val api: DecidingAgentAPI) {
-    fun decideNext(obj: Any) : Future<AiDecision> {
+    fun decideNext(obj: ApiAdapter) : Future<AiDecision> {
         return api.decideNextAction(MethodUtils.parseObjectForDecisionSchema(obj))
     }
 }

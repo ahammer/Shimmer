@@ -12,6 +12,7 @@ interface ApiAdapter : BaseInterfaces{
         resultClass: KClass<R>,
     ): R
 
+    fun getBaseType(): KClass<Any>
     // Gets the memory for this instance.
     fun getMemoryMap() : MutableMap<String, String>
 }

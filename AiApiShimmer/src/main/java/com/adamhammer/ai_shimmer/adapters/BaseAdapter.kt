@@ -4,13 +4,18 @@ import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
 import com.adamhammer.ai_shimmer.interfaces.AiDecision
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.util.concurrent.Future
+import kotlin.reflect.KClass
 
-abstract class BaseApiAdapter: ApiAdapter {
+abstract class BaseApiAdapter(private val baseType: KClass<Any>): ApiAdapter {
 
     private val decidingAgent by lazy {
         DecidingAgent(api = ShimmerBuilder(DecidingAgentAPI::class)
-            .setAdapter(this)
+            .setAdapterDirect(this)
             .build())
+    }
+
+    override fun getBaseType(): KClass<Any> {
+        return baseType
     }
 
     override fun decideNextAction(): Future<AiDecision> {

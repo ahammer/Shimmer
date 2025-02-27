@@ -3,6 +3,8 @@
 package com.adamhammer.ai_shimmer.utils
 
 
+import BaseApiAdapter
+import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.Memorize
 import com.adamhammer.ai_shimmer.interfaces.SerializableRequest
 import io.swagger.v3.oas.annotations.media.Schema
@@ -161,7 +163,7 @@ object MethodUtils {
      * and returns a JSON string representing the object's capabilities, including method signatures,
      * associated annotations (such as Operation, Parameter, and ApiResponse), and a schema of the object's type.
      */
-    fun parseObjectForDecisionSchema(obj: Any): String {
+    fun parseObjectForDecisionSchema(obj: ApiAdapter): String {
         val kClass = obj::class
         // Exclude methods inherited from Any.
         val methods = kClass.java.methods.filter { it.declaringClass != Any::class.java }

@@ -14,7 +14,7 @@ import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import java.lang.reflect.Method
 
-public class OpenAiAdapter : BaseApiAdapter() {
+public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = baseType) {
     // Read API key from the environment variable.
     private val apiKey: String = System.getenv("OPENAI_API_KEY")
         ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")

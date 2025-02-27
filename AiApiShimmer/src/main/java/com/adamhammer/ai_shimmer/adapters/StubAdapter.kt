@@ -6,7 +6,7 @@ import java.lang.reflect.Method
 import java.util.concurrent.Future
 import kotlin.reflect.KClass
 
-class StubAdapter : BaseApiAdapter() {
+class StubAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = baseType) {
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
         return resultClass.java.getDeclaredConstructor().newInstance()
     }

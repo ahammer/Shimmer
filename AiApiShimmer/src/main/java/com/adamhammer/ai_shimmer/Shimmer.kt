@@ -5,10 +5,12 @@ import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
+import kotlin.reflect.KClass
 
 // The invocation handler.
-internal class Shimmer(
-    private val adapter: ApiAdapter
+internal class Shimmer<T : Any>(
+    private val adapter: ApiAdapter,
+    private val kClass: KClass<T>
 ) : InvocationHandler {
 
     override fun invoke(proxy: Any?, method: Method, args: Array<out Any>?): Any? {

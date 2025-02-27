@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import java.util.concurrent.Future
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import kotlin.reflect.KClass
 
 // Data classes for the final idea and the ideation result.
 @Serializable
@@ -173,7 +174,7 @@ class BasicAgentTest {
         // Build the API using the builder with a com.adamhammer.ai_shimmer.adapters.StubAdapter.
         // (Assumes AiApiBuilder and com.adamhammer.ai_shimmer.adapters.StubAdapter are available in your project.)
         val api = ShimmerBuilder(BasicAIApi::class)
-            .setAdapter(OpenAiAdapter())
+            .setAdapterClass(OpenAiAdapter::class)
             .build()
 
         val agent = BasicAgent(api)
