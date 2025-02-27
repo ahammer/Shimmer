@@ -117,6 +117,7 @@ object MethodUtils {
     /**
      * Encodes the provided argument to its JSON string representation using kotlinx.serialization.
      */
+    @OptIn(InternalSerializationApi::class)
     private fun encodeArgumentValue(arg: Any?): String {
         return if (arg == null) {
             "null"
@@ -164,42 +165,38 @@ object MethodUtils {
      * associated annotations (such as Operation, Parameter, and ApiResponse), and a schema of the object's type.
      */
     fun parseObjectForDecisionSchema(obj: ApiAdapter): String {
-        val kClass = obj::class
+        val kClass = obj.getBaseType()
         // Exclude methods inherited from Any.
-        val methods = kClass.java.methods.filter { it.declaringClass != Any::class.java }
+        val methods = kClass.java.methods.filter { it.declaringClass == kClass.java }
+
         val methodsJson = methods.map { method ->
             buildJsonObject {
+                // Always include the method name.
                 put("name", method.name)
-                // Include Operation annotation details if present.
+
+                // Add Operation annotation details if present and non-blank.
                 method.getAnnotation(Operation::class.java)?.let { op ->
-                    put("summary", op.summary)
-                    put("description", op.description)
+                    if (op.description.isNotBlank()) put("description", op.description)
                 }
-                // Include details of the parameters.
-                val paramsJson = buildJsonArray {
-                    method.parameters.forEach { param ->
-                        add(buildJsonObject {
-                            put("name", param.name)
-                            put("type", param.type.kotlin.qualifiedName ?: param.type.simpleName)
-                            val paramAnn = param.getAnnotation(Parameter::class.java)
-                            put("description", paramAnn?.description ?: "")
-                        })
+
+                // Process parameters: only include the description if provided (and not blank).
+                val paramsJson = method.parameters.mapNotNull { param ->
+                    param.getAnnotation(Parameter::class.java)?.let { paramAnn ->
+                        val desc = paramAnn.description.trim()
+                        if (desc.isNotEmpty()) buildJsonObject {
+                            put("description", desc)
+                        } else null
                     }
                 }
-                put("parameters", paramsJson)
-                // Include the result schema.
-                put("resultSchema", buildResultSchema(method))
-                // Include memorize annotation if present.
-                method.getAnnotation(Memorize::class.java)?.let { memorizeAnn ->
-                    put("memorize", memorizeAnn.label)
-                }
+                if (paramsJson.isNotEmpty()) put("parameters", JsonArray(paramsJson))
+
             }
         }
         val snapshot = buildJsonObject {
-            put("className", kClass.qualifiedName ?: kClass.simpleName ?: "Unknown")
-            put("schema", buildSchema(kClass))
+            put("Agent Name", kClass.simpleName ?: "Unknown")
             put("methods", JsonArray(methodsJson))
         }
         return json.encodeToString(JsonObject.serializer(), snapshot)
     }
+
 }
