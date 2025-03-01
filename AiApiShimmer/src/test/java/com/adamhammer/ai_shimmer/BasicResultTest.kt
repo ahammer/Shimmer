@@ -40,7 +40,7 @@ class AiApiShimmerTest {
         )
 
         @ApiResponse(
-            description = "The answer as a struct",
+            description = "The answer to the question",
             content = [Content(schema = Schema(implementation = Answer::class))]
         )
 

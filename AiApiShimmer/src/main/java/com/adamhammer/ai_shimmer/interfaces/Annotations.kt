@@ -5,3 +5,5 @@ package com.adamhammer.ai_shimmer.interfaces
  */
 // Memorize the result of this call to this field
 annotation class Memorize(val label: String)
+annotation class Subscribe(val channel: String)
+annotation class Publish(val channel: String)

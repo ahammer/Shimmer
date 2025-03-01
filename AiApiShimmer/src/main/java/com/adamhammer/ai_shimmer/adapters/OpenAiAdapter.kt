@@ -7,6 +7,8 @@ import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
 import com.openai.models.ChatCompletionCreateParams
 import com.openai.models.ChatModel
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -30,23 +32,23 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
-        val resultSchema = MethodUtils.buildSchema(resultClass)
+        val schemaDescription = method.getDeclaredAnnotation(ApiResponse::class.java)?.description ?: ""
+        val resultSchema = MethodUtils.buildResultSchema(resultClass)
         val inputs = MethodUtils.generateSerializableRequest(method, args, getMemoryMap())
         val jsonContent = json.encodeToString(inputs);
-        val prompt = """!!! Execute this method and return the filled output template !!!
-            The MetaData provides information about the method call, it's parameters, output and schema.
-            Focus on the user-data/inputs when solving the problem.
-            
-            Memory provided is the result of past-steps, use it to help guide you.
+
+        val prompt = """
+            This is a system of request/response. A Method call in JSON will be provided. Respond directly as a string or in the JSON format requested.                       
             # METHOD
             $jsonContent
-            # BEGIN OUTPUT TEMPLATE
-            $resultSchema""".trimIndent()
+            # RESULT            
+            $schemaDescription
+            Output Schema: $resultSchema""".trimIndent()
 
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
             .addUserMessage(prompt)
-            .model(ChatModel.O3_MINI)
+            .model(ChatModel.GPT_4O)
             .build()
 
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)

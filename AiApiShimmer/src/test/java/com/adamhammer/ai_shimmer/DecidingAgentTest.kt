@@ -1,30 +1,32 @@
 package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-import com.adamhammer.ai_shimmer.interfaces.AiDecision
-import com.adamhammer.ai_shimmer.interfaces.BaseInterfaces
+import com.adamhammer.ai_shimmer.interfaces.*
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
-import com.adamhammer.ai_shimmer.interfaces.Memorize
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 
-interface AutonomousAIApi : BaseInterfaces{
+@Schema(description = "Autonomous that reflects on the user input and delivers a result when confidentially")
+interface AutonomousAIApi : BaseInterfaces {
 
     @Operation(
-        description = "Gather environmental data and update internal state with current context."
+        description = "Accept input from the user and try and understand it"
     )
     @ApiResponse(
-        description = "Result of environmental perception.",
+        description = "Rephrase and clarify the users input.",
         content = [Content(schema = Schema(implementation = String::class))]
     )
-    @Memorize(label = "perceive")
-    fun perceive(): Future<String>
+    @Memorize(label = "Users Intent")
+    @Subscribe(channel = "User Input")
+    fun understand(
+        @Parameter(description = "The users input we are trying to understand.")
+        data: String): Future<String>
 
     @Operation(
-        summary = "Analyze",
         description = "Process the gathered data to extract insights and identify potential actions."
     )
     @ApiResponse(
@@ -35,7 +37,6 @@ interface AutonomousAIApi : BaseInterfaces{
     fun analyze(): Future<String>
 
     @Operation(
-        summary = "Plan",
         description = "Devise a strategy based on current insights and previous memory to decide the next steps."
     )
     @ApiResponse(
@@ -46,19 +47,7 @@ interface AutonomousAIApi : BaseInterfaces{
     fun plan(): Future<String>
 
     @Operation(
-        summary = "Act",
-        description = "Execute the planned action within the environment."
-    )
-    @ApiResponse(
-        description = "Result of action execution.",
-        content = [Content(schema = Schema(implementation = String::class))]
-    )
-    @Memorize(label = "act")
-    fun act(): Future<String>
-
-    @Operation(
-        summary = "Reflect",
-        description = "Evaluate the outcome of the action and update internal memory for future iterations."
+        description = "Reflect on the current state and provide the update."
     )
     @ApiResponse(
         description = "Result of the reflection process.",
@@ -66,6 +55,17 @@ interface AutonomousAIApi : BaseInterfaces{
     )
     @Memorize(label = "reflect")
     fun reflect(): Future<String>
+
+    @Operation(
+        description = "Deliver the result"
+    )
+    @ApiResponse(
+        description = "The final result/communication",
+        content = [Content(schema = Schema(implementation = String::class))]
+    )
+    @Memorize(label = "act")
+    @Publish("output")
+    fun act(): Future<String>
 }
 
 
@@ -91,10 +91,11 @@ class DecidingAgentTest {
             .build()
 
         val agent = AutonomousAgent(api)
-        val r1 = agent.step().get()
-        val r2 = agent.step().get()
-        print (r1);
-        print (r2);
+        val perception = api.understand("I want to know about the meaning of life.").get()
+        val nextAction = api.decideNextAction().get();
+
+        print (perception);
+
 
     }
 }

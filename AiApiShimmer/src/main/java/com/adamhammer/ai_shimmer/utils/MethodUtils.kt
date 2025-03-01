@@ -3,7 +3,6 @@
 package com.adamhammer.ai_shimmer.utils
 
 
-import BaseApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.Memorize
 import com.adamhammer.ai_shimmer.interfaces.SerializableRequest
@@ -28,9 +27,9 @@ object MethodUtils {
     /**
      * Public entry point to build a JSON schema as a pretty-printed string.
      */
-    fun buildSchema(kClass: KClass<*>): String {
+    fun buildResultSchema(kClass: KClass<*>): String {
         return when {
-            kClass == String::class -> "\"Respond with text\""
+            kClass == String::class -> "Plain Text"
             kClass.java.isEnum -> json.encodeToString(JsonObject.serializer(), buildEnumSchema(kClass))
             else -> json.encodeToString(JsonObject.serializer(), buildClassSchema(kClass))
         }
@@ -63,7 +62,7 @@ object MethodUtils {
                 } else {
                     buildJsonObject {
                         put("description", description)
-                        put("schema", buildSchema(propKClass ?: String::class))
+                        put("schema", buildResultSchema(propKClass ?: String::class))
                     }
                 }
                 put(prop.name, propSchema)
@@ -85,8 +84,7 @@ object MethodUtils {
         return SerializableRequest(
             method = methodField,
             parameters = parametersList,
-            memory = memoryMap,
-            resultSchema = resultSchema
+            memory = memoryMap
         )
     }
 
@@ -97,8 +95,7 @@ object MethodUtils {
         val op = method.getAnnotation(Operation::class.java)
         val builder = StringBuilder(method.name)
         op?.let {
-            if (it.summary.isNotEmpty()) builder.append(" - Summary: ${it.summary}")
-            if (it.description.isNotEmpty()) builder.append(" - Description: ${it.description}")
+            if (it.description.isNotEmpty()) builder.append(": ${it.description}")
         }
         return builder.toString()
     }
@@ -150,9 +147,9 @@ object MethodUtils {
         val apiResponse = method.getAnnotation(ApiResponse::class.java)
         return if (apiResponse != null && apiResponse.content.isNotEmpty()) {
             val schemaAnn = apiResponse.content[0].schema
-            buildSchema(schemaAnn.implementation)
+            buildResultSchema(schemaAnn.implementation)
         } else {
-            buildSchema(method.returnType.kotlin)
+            buildResultSchema(method.returnType.kotlin)
         }
     }
 
