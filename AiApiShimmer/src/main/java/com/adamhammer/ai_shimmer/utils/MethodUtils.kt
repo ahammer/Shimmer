@@ -2,13 +2,12 @@
 
 package com.adamhammer.ai_shimmer.utils
 
-
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.Memorize
 import com.adamhammer.ai_shimmer.interfaces.SerializableRequest
-import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -18,6 +17,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import java.lang.reflect.Method
+import kotlin.reflect.jvm.javaField
 
 object MethodUtils {
 
@@ -29,7 +29,7 @@ object MethodUtils {
      */
     fun buildResultSchema(kClass: KClass<*>): String {
         return when {
-            kClass == String::class -> "Plain Text"
+            kClass == String::class -> "Text"
             kClass.java.isEnum -> json.encodeToString(JsonObject.serializer(), buildEnumSchema(kClass))
             else -> json.encodeToString(JsonObject.serializer(), buildClassSchema(kClass))
         }
@@ -52,18 +52,32 @@ object MethodUtils {
     private fun buildClassSchema(kClass: KClass<*>): JsonObject {
         return buildJsonObject {
             kClass.declaredMemberProperties.forEach { prop ->
-                val description = prop.findAnnotation<Schema>()?.description ?: "optional"
+                // Check for Schema on the property or its backing field.
+                val schemaAnnotation = prop.findAnnotation<Schema>() ?: prop.javaField?.getAnnotation(Schema::class.java)
+                val description = schemaAnnotation?.description ?: "optional"
                 val propKClass = prop.returnType.classifier as? KClass<*>
-                val propSchema = if (propKClass != null && propKClass.java.isEnum) {
-                    buildJsonObject {
+                val propSchema = when {
+                    // Handle enums.
+                    propKClass != null && propKClass.java.isEnum -> buildJsonObject {
                         put("description", description)
                         put("enum", json.encodeToJsonElement(propKClass.java.enumConstants.map { it.toString() }))
                     }
-                } else {
-                    buildJsonObject {
-                        put("description", description)
-                        put("schema", buildResultSchema(propKClass ?: String::class))
+                    // For maps, output a sample map with "key" -> description.
+                    propKClass == Map::class -> buildJsonObject {
+                        put("key", description)
                     }
+                    // For lists and sets, output a JSON array with a single element: the description.
+                    (propKClass == List::class || propKClass == Set::class) -> json.encodeToJsonElement(listOf(description))
+                    // For primitives, return the description string directly.
+                    propKClass != null && (propKClass == String::class ||
+                            propKClass == Int::class ||
+                            propKClass == Long::class ||
+                            propKClass == Double::class ||
+                            propKClass == Float::class ||
+                            propKClass == Boolean::class) -> json.encodeToJsonElement(description)
+                    // For nested objects, recursively build the schema.
+                    propKClass != null -> buildClassSchema(propKClass)
+                    else -> json.encodeToJsonElement(description)
                 }
                 put(prop.name, propSchema)
             }
@@ -153,7 +167,6 @@ object MethodUtils {
         }
     }
 
-
     /**
      * Parses the provided object for decision schema.
      *
@@ -195,5 +208,4 @@ object MethodUtils {
         }
         return json.encodeToString(JsonObject.serializer(), snapshot)
     }
-
 }

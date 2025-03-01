@@ -92,7 +92,9 @@ class DecidingAgentTest {
 
         val agent = AutonomousAgent(api)
         val perception = api.understand("I want to know about the meaning of life.").get()
-        val nextAction = api.decideNextAction().get();
+        val nextAction = api.decideNextAction();
+        val na = nextAction.get()
+
 
         print (perception);
 

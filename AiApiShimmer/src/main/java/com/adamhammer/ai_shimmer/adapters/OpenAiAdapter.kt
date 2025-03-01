@@ -48,7 +48,7 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
             .addUserMessage(prompt)
-            .model(ChatModel.GPT_4O)
+            .model(ChatModel.GPT_4O_MINI)
             .build()
 
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)

@@ -1,5 +1,6 @@
 package com.adamhammer.ai_shimmer.interfaces
 
+import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.Serializable
 import java.util.concurrent.Future
 
@@ -10,9 +11,12 @@ import java.util.concurrent.Future
  * @property args A collection of key-value maps representing the arguments.
  */
 @Serializable
+@Schema(title = "AI Decision", description = "Encapsulates the decision logic for the AI.")
 data class AiDecision(
+    @get:Schema(title = "Method", description = "The method to invoke.")
     val method: String,
-    val args: Collection<Map<String, String>>
+    @get:Schema(title = "Arguments", description = "A collection of key-value pairs representing the arguments for the method.")
+    val args: Map<String, String>
 )
 
 /**
