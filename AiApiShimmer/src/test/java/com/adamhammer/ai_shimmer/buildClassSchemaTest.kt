@@ -37,10 +37,7 @@ class ClassSchemaTest {
     @Test
     fun testEnumSchema() {
         val expect = """{
-    "color": {
-        "description": "The color enum",
-        "enum": ["RED", "GREEN", "BLUE"]
-    }
+    "color": "Enum color (RED/GREEN/BLUE)"
 }"""
         val result = MethodUtils.buildResultSchema(EnumHolder::class)
         assertEquals(expect, result)
@@ -85,7 +82,7 @@ class ClassSchemaTest {
     fun testMapSchema() {
         val expect = """{
     "mapping": {
-        "key": "A mapping of key-value pairs"
+        "key": "value"
     }
 }"""
         val result = MethodUtils.buildResultSchema(MapHolder::class)
@@ -139,19 +136,20 @@ class ClassSchemaTest {
     @Test
     fun testComplexSchema() {
         val expect = """{
-    "primitive": "A simple string",
-    "color": {
-        "description": "An enum field",
-        "enum": ["RED", "GREEN", "BLUE"]
-    },
-    "list": ["A list of strings"],
-    "set": ["A set of strings"],
+    "color": "Enum color (RED/GREEN/BLUE)",
+    "list": [
+        "A list of strings"
+    ],
     "map": {
-        "key": "A map of strings"
+        "key": "value"
     },
     "nested": {
         "field": "Nested field"
-    }
+    },
+    "primitive": "A simple string",
+    "set": [
+        "A set of strings"
+    ]
 }"""
         val result = MethodUtils.buildResultSchema(Complex::class)
         assertEquals(expect, result)

@@ -17,6 +17,8 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import java.lang.reflect.Method
+import java.util.*
+import kotlin.reflect.jvm.internal.impl.utils.CollectionsKt
 import kotlin.reflect.jvm.javaField
 
 object MethodUtils {
@@ -57,16 +59,17 @@ object MethodUtils {
                 val description = schemaAnnotation?.description ?: "optional"
                 val propKClass = prop.returnType.classifier as? KClass<*>
                 val propSchema = when {
-                    // Handle enums.
-                    propKClass != null && propKClass.java.isEnum -> buildJsonObject {
-                        put("description", description)
-                        put("enum", json.encodeToJsonElement(propKClass.java.enumConstants.map { it.toString() }))
+                    // Handle enums: output a string in the format "Enum <EnumName> (<VALUE1>/<VALUE2>/…)"
+                    propKClass != null && propKClass.java.isEnum -> {
+                        val enumName = prop.name
+                        val enumValues = propKClass.java.enumConstants.map { it.toString() }
+                        json.encodeToJsonElement("Enum $enumName (${enumValues.joinToString("/")})")
                     }
-                    // For maps, output a sample map with "key" -> description.
+                    // For maps, output a sample map with "key" -> "value"
                     propKClass == Map::class -> buildJsonObject {
-                        put("key", description)
+                        put("key", "value")
                     }
-                    // For lists and sets, output a JSON array with a single element: the description.
+                    // For lists and sets, output an empty JSON array.
                     (propKClass == List::class || propKClass == Set::class) -> json.encodeToJsonElement(listOf(description))
                     // For primitives, return the description string directly.
                     propKClass != null && (propKClass == String::class ||
