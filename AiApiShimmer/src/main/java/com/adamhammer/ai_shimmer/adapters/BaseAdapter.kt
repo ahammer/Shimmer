@@ -3,6 +3,7 @@ import com.adamhammer.ai_shimmer.agents.DecidingAgent
 import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
 import com.adamhammer.ai_shimmer.interfaces.AiDecision
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 import kotlin.reflect.KClass
 
@@ -19,7 +20,7 @@ abstract class BaseApiAdapter(private val baseType: KClass<Any>): ApiAdapter {
     }
 
     override fun decideNextAction(): Future<AiDecision> {
-        return decidingAgent.decideNext(this)
+            return decidingAgent.decideNext(this)
     }
 
     override fun runAction(decision: AiDecision) {

@@ -17,7 +17,9 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import java.util.*
+import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.internal.impl.utils.CollectionsKt
 import kotlin.reflect.jvm.javaField
 
@@ -30,11 +32,35 @@ object MethodUtils {
      * Public entry point to build a JSON schema as a pretty-printed string.
      */
     fun buildResultSchema(kClass: KClass<*>): String {
-        return when {
-            kClass == String::class -> "Text"
-            kClass.java.isEnum -> json.encodeToString(JsonObject.serializer(), buildEnumSchema(kClass))
-            else -> json.encodeToString(JsonObject.serializer(), buildClassSchema(kClass))
+        println(">> Entering buildResultSchema with kClass = ${kClass.qualifiedName}")
+
+        // First checkpoint: check if it's a String
+        if (kClass == String::class) {
+            println(">> Detected kClass is String. Returning \"Text\".")
+            return "Text"
         }
+
+        // Second checkpoint: check if it's an enum
+        if (kClass.java.isEnum) {
+            println(">> Detected kClass is an enum type.")
+            val enumSchema = buildEnumSchema(kClass)
+            println(">> Built enum schema: $enumSchema")
+
+            val encodedEnum = json.encodeToString(JsonObject.serializer(), enumSchema)
+            println(">> Encoded enum schema as JSON: $encodedEnum")
+
+            return encodedEnum
+        }
+
+        // Final checkpoint: treat it as a regular class
+        println(">> Detected kClass is neither String nor an enum type.")
+        val classSchema = buildClassSchema(kClass)
+        println(">> Built class schema: $classSchema")
+
+        val encodedClass = json.encodeToString(JsonObject.serializer(), classSchema)
+        println(">> Encoded class schema as JSON: $encodedClass")
+
+        return encodedClass
     }
 
     /**
@@ -51,41 +77,156 @@ object MethodUtils {
      * Recursively builds a JSON object for a non-enum class by inspecting its declared properties.
      * If a property is an enum, its possible values are included.
      */
-    private fun buildClassSchema(kClass: KClass<*>): JsonObject {
-        return buildJsonObject {
-            kClass.declaredMemberProperties.forEach { prop ->
-                // Check for Schema on the property or its backing field.
-                val schemaAnnotation = prop.findAnnotation<Schema>() ?: prop.javaField?.getAnnotation(Schema::class.java)
-                val description = schemaAnnotation?.description ?: "optional"
-                val propKClass = prop.returnType.classifier as? KClass<*>
-                val propSchema = when {
-                    // Handle enums: output a string in the format "Enum <EnumName> (<VALUE1>/<VALUE2>/…)"
-                    propKClass != null && propKClass.java.isEnum -> {
-                        val enumName = prop.name
-                        val enumValues = propKClass.java.enumConstants.map { it.toString() }
-                        json.encodeToJsonElement("Enum $enumName (${enumValues.joinToString("/")})")
-                    }
-                    // For maps, output a sample map with "key" -> "value"
-                    propKClass == Map::class -> buildJsonObject {
-                        put("key", "value")
-                    }
-                    // For lists and sets, output an empty JSON array.
-                    (propKClass == List::class || propKClass == Set::class) -> json.encodeToJsonElement(listOf(description))
-                    // For primitives, return the description string directly.
-                    propKClass != null && (propKClass == String::class ||
-                            propKClass == Int::class ||
-                            propKClass == Long::class ||
-                            propKClass == Double::class ||
-                            propKClass == Float::class ||
-                            propKClass == Boolean::class) -> json.encodeToJsonElement(description)
-                    // For nested objects, recursively build the schema.
-                    propKClass != null -> buildClassSchema(propKClass)
-                    else -> json.encodeToJsonElement(description)
-                }
-                put(prop.name, propSchema)
-            }
+
+
+    // If the given kClass is a dynamic proxy, return the first interface's KClass; otherwise return kClass.
+    private fun actualKClass(kClass: KClass<*>): KClass<*> {
+        return if (Proxy.isProxyClass(kClass.java)) {
+            kClass.java.interfaces.firstOrNull()?.kotlin ?: kClass
+        } else {
+            kClass
         }
     }
+
+    // Returns a safe class name: either the Kotlin qualifiedName (if available) or falls back to the Java class name.
+    private fun safeClassName(kClass: KClass<*>): String =
+        actualKClass(kClass).qualifiedName ?: actualKClass(kClass).java.name
+
+    private fun buildClassSchema(kClass: KClass<*>): JsonObject {
+        val realKClass = actualKClass(kClass)
+        println(">====================================================")
+        println("Entering buildClassSchema(kClass = ${safeClassName(kClass)})")
+        println("kClass info:")
+        println(
+            "  isSealed=${realKClass.isSealed}, isData=${realKClass.isData}, isCompanion=${realKClass.isCompanion}, " +
+                    "isInner=${realKClass.isInner}, isOpen=${realKClass.isOpen}, isFinal=${realKClass.isFinal}, isAbstract=${realKClass.isAbstract}"
+        )
+
+        // Attempt to read declared members
+        val declaredProps = try {
+            val props = realKClass.declaredMemberProperties
+            println("Successfully fetched declaredMemberProperties: ${props.size} total.")
+            println("Property names = [${props.joinToString { it.name }}]")
+            props
+        } catch (ex: Throwable) {
+            println("ERROR: Exception thrown while getting declaredMemberProperties for ${safeClassName(realKClass)}: ${ex.message}")
+            ex.printStackTrace()
+            // Return an empty list so that building can continue, though it won't have any properties
+            emptyList<KProperty1<out Any, Any?>>()
+        }
+
+        // Build the JSON object
+        val resultJson = try {
+            buildJsonObject {
+                declaredProps.forEach { prop ->
+                    println("----------------------------------------------------")
+                    println("Now processing property '${prop.name}' from class ${safeClassName(realKClass)}")
+
+                    // Attempt to read @Schema annotation
+                    val schemaAnnotation = try {
+                        prop.findAnnotation<Schema>()
+                            ?: prop.javaField?.getAnnotation(Schema::class.java)
+                    } catch (ex: Throwable) {
+                        println("ERROR: Exception while reading annotations from property '${prop.name}': ${ex.message}")
+                        ex.printStackTrace()
+                        null
+                    }
+
+                    val description = schemaAnnotation?.description ?: "optional"
+                    println("   Annotation present? ${schemaAnnotation != null}, using description=\"$description\"")
+
+                    // Attempt to read the property’s KClass
+                    val propKClass: KClass<*>? = try {
+                        prop.returnType.classifier as? KClass<*>
+                    } catch (ex: Throwable) {
+                        println("ERROR: Exception thrown getting classifier for '${prop.name}': ${ex.message}")
+                        ex.printStackTrace()
+                        null
+                    }
+
+                    // Debug the type
+                    println("   Determined property type for '${prop.name}': ${propKClass?.qualifiedName ?: "Could not resolve"}")
+
+                    // Decide how to build JSON for this property
+                    val propSchema: JsonElement = try {
+                        when {
+                            // (1) Enum?
+                            propKClass != null && propKClass.java.isEnum -> {
+                                println("   -> It's an enum type.")
+                                val enumValues = propKClass.java.enumConstants.map { it.toString() }
+                                json.encodeToJsonElement("Enum ${prop.name} (${enumValues.joinToString("/")})")
+                            }
+
+                            // (2) Map?
+                            propKClass == Map::class -> {
+                                println("   -> It's a Map; will use a sample {\"key\": \"value\"}.")
+                                buildJsonObject {
+                                    put("key", "value")
+                                }
+                            }
+
+                            // (3) List or Set?
+                            (propKClass == List::class || propKClass == Set::class) -> {
+                                println("   -> It's a List/Set; will use a sample array containing the description.")
+                                json.encodeToJsonElement(listOf(description))
+                            }
+
+                            // (4) Primitive?
+                            propKClass in setOf(
+                                String::class, Int::class, Long::class,
+                                Double::class, Float::class, Boolean::class
+                            ) -> {
+                                println("   -> It's a primitive/string type; will use 'description' as the value.")
+                                json.encodeToJsonElement(description)
+                            }
+
+                            // (5) Nested object?
+                            propKClass != null -> {
+                                println("   -> It's a nested object; recursing into buildClassSchema(${propKClass.simpleName}).")
+                                buildClassSchema(propKClass)
+                            }
+
+                            // (6) Fallback
+                            else -> {
+                                println("   -> Unrecognized type; using fallback with 'description'.")
+                                json.encodeToJsonElement(description)
+                            }
+                        }
+                    } catch (ex: Throwable) {
+                        println("ERROR: Exception thrown while deciding property type in 'when' for '${prop.name}': ${ex.message}")
+                        ex.printStackTrace()
+                        // Fallback if something blew up
+                        json.encodeToJsonElement("ERROR: ${ex.message ?: "unknown"}")
+                    }
+
+                    println("   -> Final schema for '${prop.name}': $propSchema")
+
+                    // Add to the JSON
+                    try {
+                        put(prop.name, propSchema)
+                    } catch (ex: Throwable) {
+                        println("ERROR: Exception thrown while putting property '${prop.name}' in JSON: ${ex.message}")
+                        ex.printStackTrace()
+                    }
+                }
+            }
+        } catch (ex: Throwable) {
+            println("ERROR: Exception thrown while building the JSON object for ${safeClassName(realKClass)}: ${ex.message}")
+            ex.printStackTrace()
+            // Build an error JSON so we at least have something
+            buildJsonObject {
+                put("error", "Could not build schema for ${safeClassName(realKClass)}, exception: ${ex.message}")
+            }
+        }
+
+        println("<< Exiting buildClassSchema for class: ${safeClassName(realKClass)}")
+        println("<====================================================\n")
+
+        return resultJson
+    }
+
+
+
 
     /**
      * Generates a SerializableRequest by extracting method and parameter metadata.
@@ -117,33 +258,39 @@ object MethodUtils {
         return builder.toString()
     }
 
-    /**
-     * Builds a map representing a method parameter's metadata and its encoded value.
-     */
-    private fun buildParameterMap(param: java.lang.reflect.Parameter, index: Int, args: Array<out Any>?): Map<String, String> {
-        val paramMap = mutableMapOf<String, String>()
+    private fun buildParameterMap(param: java.lang.reflect.Parameter, index: Int, args: Array<out Any>?): Map<String, JsonElement> {
+        val paramMap = mutableMapOf<String, JsonElement>()
         val paramAnn = param.getAnnotation(Parameter::class.java)
-        paramMap["description"] = paramAnn?.description ?: ""
-        paramMap["value"] = encodeArgumentValue(if (args != null && index < args.size) args[index] else null)
+        // Store description as a JsonPrimitive.
+        paramMap["description"] = JsonPrimitive(paramAnn?.description ?: "")
+
+        // Instead of calling toString(), encode the argument to a JsonElement.
+        val valueJson = if (args != null && index < args.size) encodeArgumentValue(args[index]) else JsonNull
+        paramMap["value"] = valueJson as JsonElement
         return paramMap
     }
+
 
     /**
      * Encodes the provided argument to its JSON string representation using kotlinx.serialization.
      */
     @OptIn(InternalSerializationApi::class)
-    private fun encodeArgumentValue(arg: Any?): String {
+    private fun encodeArgumentValue(arg: Any?): JsonElement {
         return if (arg == null) {
-            "null"
+            JsonNull
         } else {
             try {
+                // Get a serializer for the argument's type
                 val serializer: KSerializer<Any> = arg::class.serializer() as KSerializer<Any>
-                json.encodeToString(serializer, arg)
+                // Encode the argument to a JsonElement rather than a string.
+                json.encodeToJsonElement(serializer, arg)
             } catch (e: Exception) {
-                "(error encoding to JSON: ${e.message})"
+                // Return an error message as a JsonPrimitive if encoding fails.
+                JsonPrimitive("(error encoding to JSON: ${e.message})")
             }
         }
     }
+
 
     /**
      * Extracts memory information if the method is annotated with @Memorize.

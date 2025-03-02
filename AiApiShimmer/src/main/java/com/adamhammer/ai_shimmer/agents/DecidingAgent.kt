@@ -29,6 +29,7 @@ interface DecidingAgentAPI {
 
 class DecidingAgent(val api: DecidingAgentAPI) {
     fun decideNext(obj: ApiAdapter) : Future<AiDecision> {
-        return api.decideNextAction(MethodUtils.parseObjectForDecisionSchema(obj))
+        val executionSchema = MethodUtils.parseObjectForDecisionSchema(obj);
+        return api.decideNextAction(executionSchema)
     }
 }

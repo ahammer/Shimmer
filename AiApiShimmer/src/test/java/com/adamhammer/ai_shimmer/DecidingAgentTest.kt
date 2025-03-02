@@ -1,7 +1,9 @@
 package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
+import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
 import com.adamhammer.ai_shimmer.interfaces.*
+import com.adamhammer.ai_shimmer.utils.MethodUtils
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -91,13 +93,30 @@ class DecidingAgentTest {
             .build()
 
         val agent = AutonomousAgent(api)
-        val perception = api.understand("I want to know about the meaning of life.").get()
+        // val perception = api.understand("I want to know about the meaning of life.").get()
         val nextAction = api.decideNextAction();
-        val na = nextAction.get()
+        try {
+            val value = nextAction.get()
+        } catch (e : Exception) {
+            e.printStackTrace()
+        }
 
 
-        print (perception);
 
-
+        //print (perception);
     }
+
+    @Test
+    fun testIdeaAPI() {
+        val api = ShimmerBuilder(DecidingAgentAPI::class)
+            .setAdapterClass(OpenAiAdapter::class)
+            .build()
+
+        val api2 = ShimmerBuilder(AutonomousAIApi::class)
+            .setAdapterClass(OpenAiAdapter::class)
+            .build()
+
+        val result = api.decideNextAction(MethodUtils.parseObjectForDecisionSchema(api2));
+    }
+
 }

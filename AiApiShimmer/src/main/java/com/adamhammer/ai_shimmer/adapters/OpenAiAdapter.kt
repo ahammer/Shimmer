@@ -27,7 +27,10 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
         .build()
 
     // Configure JSON parser.
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+    }
 
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
@@ -35,15 +38,41 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
         val schemaDescription = method.getDeclaredAnnotation(ApiResponse::class.java)?.description ?: ""
         val resultSchema = MethodUtils.buildResultSchema(resultClass)
         val inputs = MethodUtils.generateSerializableRequest(method, args, getMemoryMap())
-        val jsonContent = json.encodeToString(inputs);
+        val jsonContent = json.encodeToString(inputs)
 
+
+        // 1) Define a system-level preamble to guide the model
+        val systemPreamble = """
+[System Role Instruction Start]
+
+You are a specialized AI Assistant that handles request/response method calls and returns results in JSON or plain text. 
+Your responsibilities:
+1. **Respect the method call structure**: A JSON block will be provided describing the method, its parameters, and any stored memory.
+2. **Check the 'Output Schema'**: This indicates the JSON format you must return when asked for JSON output. 
+   - Do NOT add any fields not mentioned in the schema.
+   - If asked for a string, return plain text without extra JSON structure.
+3. **Incorporate Memory if Provided**: If 'memory' is present, use it to inform your answer. 
+4. **No Additional Commentary**: Do not include apology statements, disclaimers, or meta-commentary.
+5. **Provide Clear and Concise Responses**: Only return the specified structure or text, without superfluous information.
+6. **When Memorize Key is present this will be stored for later**: Minimize token count, Maximize content effectiveness
+
+
+In summary, follow these steps whenever you see a request:
+- Read the method call (JSON).
+- Use the method description, parameters, and memory to form your response.
+- Output the response in the requested format (plain text or JSON matching the schema).
+
+[System Role Instruction End]""".trimIndent()
+
+    // 2) Combine the system preamble with your existing prompt format
         val prompt = """
-            This is a system of request/response. A Method call in JSON will be provided. Respond directly as a string or in the JSON format requested.                       
-            # METHOD
-            $jsonContent
-            # RESULT            
-            $schemaDescription
-            Output Schema: $resultSchema""".trimIndent()
+$systemPreamble
+
+# METHOD
+$jsonContent
+
+# RESULT for $schemaDescription
+$resultSchema""".trimIndent()
 
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
@@ -51,10 +80,23 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
             .model(ChatModel.GPT_4O_MINI)
             .build()
 
+        println("╔══════════════════╗")
+        println("║   OPENAI TX      ║")
+        println("╚══════════════════╝")
+        println()
+        println(prompt)
+        println()
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)
 
         val completionText = chatCompletion.choices().firstOrNull()?.message()?.content()?.get()?.trim()
             ?: throw RuntimeException("No response from OpenAI API")
+
+        println("╔══════════════════╗")
+        println("║   OPENAI RX      ║")
+        println("╚══════════════════╝")
+        println()
+        println(completionText)
+        println()
 
         // If the expected result type is String, return the raw response directly.
         if (resultClass == String::class) {
@@ -74,6 +116,7 @@ public class OpenAiAdapter(baseType: KClass<Any>) : BaseApiAdapter(baseType = ba
             throw RuntimeException("Failed to deserialize JSON response: ${e.message}", e)
         }
     }
+
 
 
     // Helper function to extract JSON from a response that might contain extra text.

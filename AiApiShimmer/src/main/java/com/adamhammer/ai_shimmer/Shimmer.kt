@@ -58,7 +58,13 @@ internal class Shimmer<T : Any>(
                 if (memorizeKey != null) {
                     adapter.getMemoryMap()[memorizeKey] = result.toString()
                 }
-                result
+
+                if (result is Future<*>) {
+                    result.get()
+                } else {
+                    result
+                }
+
             } else {
                 throw IllegalStateException("Return type of method ${method.name} is not parameterized")
             }
