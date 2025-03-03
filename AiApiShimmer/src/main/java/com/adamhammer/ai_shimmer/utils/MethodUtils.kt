@@ -232,7 +232,7 @@ object MethodUtils {
      * Generates a SerializableRequest by extracting method and parameter metadata.
      */
     @OptIn(InternalSerializationApi::class)
-    fun generateSerializableRequest(method: Method, args: Array<out Any>?, memoryMap: MutableMap<String, String>): SerializableRequest {
+    fun generateSerializableRequest(method: Method, args: Array<out Any>?, memoryMap: Map<String, String>): SerializableRequest {
         val methodField = buildMethodField(method)
         val parametersList = method.parameters.mapIndexed { index, param ->
             buildParameterMap(param, index, args)

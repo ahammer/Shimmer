@@ -33,11 +33,11 @@ public class OpenAiAdapter : BaseApiAdapter() {
     }
 
     @OptIn(InternalSerializationApi::class)
-    override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>): R {
+    override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>, memory: Map<String, String>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
         val schemaDescription = method.getDeclaredAnnotation(ApiResponse::class.java)?.description ?: ""
         val resultSchema = MethodUtils.buildResultSchema(resultClass)
-        val inputs = MethodUtils.generateSerializableRequest(method, args, getMemoryMap())
+        val inputs = MethodUtils.generateSerializableRequest(method, args, memory)
         val jsonContent = json.encodeToString(inputs)
 
 

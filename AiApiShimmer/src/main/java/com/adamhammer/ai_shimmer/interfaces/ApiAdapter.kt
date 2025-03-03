@@ -10,7 +10,6 @@ interface ApiAdapter {
         method: Method,
         args: Array<out Any>?,
         resultClass: KClass<R>,
+        memory: Map<String, String>
     ): R
-
-    fun getMemoryMap() : MutableMap<String, String>
 }

@@ -27,25 +27,6 @@ internal class Shimmer<T : Any>(
 
         // Always execute the method asynchronously.
         return CompletableFuture.supplyAsync {
-            // First, attempt to delegate the call to a local implementation on the adapter.
-            try {
-                // Look up a public method on the adapter with the same name and parameter types.
-                val localMethod = adapter::class.java.getMethod(method.name, *method.parameterTypes)
-                // Avoid recursion: ensure we are not invoking the generic handleRequest.
-                if (localMethod.name != "handleRequest") {
-                    val localResult = localMethod.invoke(adapter, *(args ?: emptyArray()))
-                    if (memorizeKey != null) {
-                        adapter.getMemoryMap()[memorizeKey] = localResult.toString()
-                    }
-                    return@supplyAsync localResult
-                }
-            } catch (ex: NoSuchMethodException) {
-                // No matching local method found; proceed with adapter.handleRequest.
-            } catch (ex: Exception) {
-                throw RuntimeException("Failed to invoke local method: ${ex.message}", ex)
-            }
-
-
             val genericReturnType = method.genericReturnType
             if (genericReturnType is ParameterizedType) {
                 val actualType = genericReturnType.actualTypeArguments[0]
@@ -54,11 +35,11 @@ internal class Shimmer<T : Any>(
                 val kClass = clazz.kotlin
 
                 // Execute the request using the adapter.
-                val result = adapter.handleRequest(method, args, kClass)
+                val result = adapter.handleRequest(method, args, kClass, instance.memory)
 
                 // If the method is annotated with @Memorize, store the result.
                 if (memorizeKey != null) {
-                    adapter.getMemoryMap()[memorizeKey] = result.toString()
+                    instance.memory[memorizeKey] = result.toString()
                 }
 
                 if (result is Future<*>) {
