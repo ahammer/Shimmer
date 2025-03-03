@@ -1,6 +1,6 @@
 package com.adamhammer.ai_shimmer.agents
 
-import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
+import com.adamhammer.ai_shimmer.ShimmerInstance
 import com.adamhammer.ai_shimmer.utils.MethodUtils
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.Parameter
 import kotlinx.serialization.Serializable
 import java.util.concurrent.Future
-import kotlin.reflect.KClass
 
 /**
  * Represents an AI decision containing the method to invoke and its arguments.
@@ -18,16 +17,17 @@ import kotlin.reflect.KClass
  * @property args A collection of key-value maps representing the arguments.
  */
 @Serializable
-@Schema(title = "AI Decision", description = "Encapsulates the decision logic for the AI.")
+@Schema(title = "AI Decision", description = "Look at the current state and options and decide what to do next")
 data class AiDecision(
-    @get:Schema(title = "Method", description = "The method to invoke.")
+    @field:Schema(description = "The method to call with the arguments")
     val method: String,
-    @get:Schema(title = "Arguments", description = "A collection of key-value pairs representing the arguments for the method.")
+    @field:Schema(description = "The arguments to pass to this call.")
     val args: Map<String, String>
 )
 
-fun DecidingAgentAPI.decide(obj: Class<Any>) : Future<AiDecision>{
-    return decideNextAction(MethodUtils.parseObjectForDecisionSchema(obj))
+fun <T : Any> DecidingAgentAPI.decide(shimmerInstance: ShimmerInstance<T>) : Future<AiDecision>{
+    val schema = MethodUtils.parseClassForMethodSchema(shimmerInstance.klass)
+    return decideNextAction(schema)
 }
 
 // A Special Agent, that backs the Decider.

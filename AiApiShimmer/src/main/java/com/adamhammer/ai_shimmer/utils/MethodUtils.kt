@@ -2,7 +2,6 @@
 
 package com.adamhammer.ai_shimmer.utils
 
-import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.Memorize
 import com.adamhammer.ai_shimmer.interfaces.SerializableRequest
 import io.swagger.v3.oas.annotations.Operation
@@ -18,9 +17,9 @@ import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
-import java.util.*
 import kotlin.reflect.KProperty1
-import kotlin.reflect.jvm.internal.impl.utils.CollectionsKt
+import kotlin.reflect.full.findAnnotations
+import kotlin.reflect.full.functions
 import kotlin.reflect.jvm.javaField
 
 object MethodUtils {
@@ -324,24 +323,23 @@ object MethodUtils {
      * and returns a JSON string representing the object's capabilities, including method signatures,
      * associated annotations (such as Operation, Parameter, and ApiResponse), and a schema of the object's type.
      */
-    fun parseObjectForDecisionSchema(kClass: Class<Any>): String {
+    fun <T:Any> parseClassForMethodSchema(kClass: KClass<T>): String {
 
         // Exclude methods inherited from Any.
-        val methods = kClass.methods.filter { it.declaringClass == kClass }
+        val methods = kClass.functions
 
         val methodsJson = methods.map { method ->
             buildJsonObject {
                 // Always include the method name.
                 put("name", method.name)
 
-                // Add Operation annotation details if present and non-blank.
-                method.getAnnotation(Operation::class.java)?.let { op ->
+                method.findAnnotations(Operation::class).firstOrNull()?.let { op ->
                     if (op.description.isNotBlank()) put("description", op.description)
                 }
 
                 // Process parameters: only include the description if provided (and not blank).
                 val paramsJson = method.parameters.mapNotNull { param ->
-                    param.getAnnotation(Parameter::class.java)?.let { paramAnn ->
+                    method.findAnnotations(Parameter::class).firstOrNull()?.let { paramAnn ->
                         val desc = paramAnn.description.trim()
                         if (desc.isNotEmpty()) buildJsonObject {
                             put("description", desc)
@@ -349,7 +347,6 @@ object MethodUtils {
                     }
                 }
                 if (paramsJson.isNotEmpty()) put("parameters", JsonArray(paramsJson))
-
             }
         }
         val snapshot = buildJsonObject {

@@ -5,7 +5,13 @@ import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
 
-class ShimmerInstance<T : Any>(val api: T, val memory: MutableMap<String, String>)
+class ShimmerInstance<T : Any>(
+    val api: T,
+    val memory: MutableMap<String, String>,
+    val klass: KClass<T>
+)
+
+
 // Builder for an AI Shimmer for an interface specification.
 // Binds the Interface -> AI Adapter.
 class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
@@ -36,7 +42,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
             shimmer
         )
 
-        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), mutableMapOf())
+        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), mutableMapOf(), apiInterface)
         shimmer.instance = instance
         return instance
     }

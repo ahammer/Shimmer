@@ -87,17 +87,20 @@ class DecidingAgentTest {
 
     @Test
     fun testIdeate() {
-
-        val agent_api = ShimmerBuilder(AutonomousAIApi::class)
+        val agentAdapter = ShimmerBuilder(AutonomousAIApi::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build().api
+            .build()
 
-        val deciding_api = ShimmerBuilder(DecidingAgentAPI::class)
+        val deciderAdapter = ShimmerBuilder(DecidingAgentAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build().api
+            .build()
+
+        val agent_api = agentAdapter.api
+
+        val deciding_api = deciderAdapter.api
 
         val agent = AutonomousAgent(agent_api, deciding_api)
-        val result = deciding_api.decide(agent_api.javaClass).get()
+        val result = deciding_api.decide(agentAdapter).get()
         println(result)
     }
 
