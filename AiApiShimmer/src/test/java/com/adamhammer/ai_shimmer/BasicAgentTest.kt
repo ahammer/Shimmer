@@ -115,7 +115,7 @@ class SimpleAgentTest {
         // (Assumes ShimmerBuilder and OpenAiAdapter are available in your project.)
         val api = ShimmerBuilder(SimpleAIApi::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build()
+            .build().api
 
         val agent = SimpleAgent(api)
         val input = "I have an AI library similar to Retrofit with annotations. " +

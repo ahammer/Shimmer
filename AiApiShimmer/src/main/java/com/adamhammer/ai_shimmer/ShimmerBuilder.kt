@@ -1,12 +1,11 @@
 package com.adamhammer.ai_shimmer
 
-
-import BaseApiAdapter
 import Shimmer
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
 
+class ShimmerInstance<T : Any>(val api: T, val memory: MutableMap<String, String>)
 // Builder for an AI Shimmer for an interface specification.
 // Binds the Interface -> AI Adapter.
 class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
@@ -25,15 +24,20 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     }
 
 
-    fun build(): T {
+    fun build(): ShimmerInstance<T> {
         if (adapter == null) {
             throw IllegalStateException("Adapter must be provided")
         }
+        val shimmer = Shimmer<T>(adapter!!)
+
         val proxyInstance = Proxy.newProxyInstance(
             apiInterface.java.classLoader,
             arrayOf(apiInterface.java),
-            Shimmer<T>(adapter!!, apiInterface)
+            shimmer
         )
-        return apiInterface.java.cast(proxyInstance)
+
+        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), mutableMapOf())
+        shimmer.instance = instance
+        return instance
     }
 }

@@ -90,11 +90,11 @@ class DecidingAgentTest {
 
         val agent_api = ShimmerBuilder(AutonomousAIApi::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build()
+            .build().api
 
         val deciding_api = ShimmerBuilder(DecidingAgentAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build()
+            .build().api
 
         val agent = AutonomousAgent(agent_api, deciding_api)
         val result = deciding_api.decide(agent_api.javaClass).get()

@@ -70,7 +70,7 @@ class AiApiShimmerTest {
     fun testStubApi() {
         val api = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(StubAdapter::class)
-            .build()
+            .build().api
 
         val result = api.askStruct(Question("What is the meaning of life", "A curious student"))
         val answer = result.get()
@@ -81,7 +81,7 @@ class AiApiShimmerTest {
     fun testJsonApi() {
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build()
+            .build().api
             .askStruct(Question("What is the greatest rodent?", "A small insect asks this question"))
             .get()
 
@@ -95,6 +95,7 @@ class AiApiShimmerTest {
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
             .build()
+            .api
             .askString(Question("What is the greatest rodent?", "A small insect asks this question"))
             .get()
 
