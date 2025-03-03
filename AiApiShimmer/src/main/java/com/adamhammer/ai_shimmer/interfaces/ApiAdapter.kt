@@ -4,7 +4,7 @@ import java.lang.reflect.Method
 import kotlin.reflect.KClass
 
 // This is an Adapter that can reference a specific AI implementation
-interface ApiAdapter : BaseInterfaces{
+interface ApiAdapter {
     // Handles a request
     fun <R : Any> handleRequest(
         method: Method,
@@ -12,7 +12,5 @@ interface ApiAdapter : BaseInterfaces{
         resultClass: KClass<R>,
     ): R
 
-    fun getBaseType(): KClass<Any>
-    // Gets the memory for this instance.
     fun getMemoryMap() : MutableMap<String, String>
 }

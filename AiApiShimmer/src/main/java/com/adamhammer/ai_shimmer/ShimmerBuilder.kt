@@ -14,8 +14,8 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
 
     fun <U : ApiAdapter> setAdapterClass(adapterClass: KClass<U>): ShimmerBuilder<T> {
         this.adapter = adapterClass.constructors
-            .first { it.parameters.size == 1 }
-            .call(apiInterface)
+            .first { it.parameters.isEmpty() }
+            .call()
         return this
     }
 

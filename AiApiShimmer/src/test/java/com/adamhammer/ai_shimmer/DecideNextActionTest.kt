@@ -2,8 +2,8 @@ package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
 import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
+import com.adamhammer.ai_shimmer.agents.decide
 import com.adamhammer.ai_shimmer.interfaces.*
-import com.adamhammer.ai_shimmer.utils.MethodUtils
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 
 @Schema(description = "Autonomous that reflects on the user input and delivers a result when confidentially")
-interface AutonomousAIApi : BaseInterfaces {
+interface AutonomousAIApi {
 
     @Operation(
         description = "Accept input from the user and try and understand it"
@@ -75,9 +75,9 @@ interface AutonomousAIApi : BaseInterfaces {
 
 // The BasicAgent class that exposes only the ideate method.
 // It accepts a BasicAIApi instance (built with AiApiBuilder) in its constructor.
-class AutonomousAgent(private val api: AutonomousAIApi) {
-    fun step() : Future<AiDecision> {
-        return api.decideNextAction()
+class AutonomousAgent(private val api: AutonomousAIApi, private val decider: DecidingAgentAPI) {
+    fun step()  {
+
         // next.execute(this or something)
     }
 }
@@ -88,35 +88,17 @@ class DecidingAgentTest {
     @Test
     fun testIdeate() {
 
-        val api = ShimmerBuilder(AutonomousAIApi::class)
+        val agent_api = ShimmerBuilder(AutonomousAIApi::class)
             .setAdapterClass(OpenAiAdapter::class)
             .build()
 
-        val agent = AutonomousAgent(api)
-        // val perception = api.understand("I want to know about the meaning of life.").get()
-        val nextAction = api.decideNextAction();
-        try {
-            val value = nextAction.get()
-        } catch (e : Exception) {
-            e.printStackTrace()
-        }
-
-
-
-        //print (perception);
-    }
-
-    @Test
-    fun testIdeaAPI() {
-        val api = ShimmerBuilder(DecidingAgentAPI::class)
+        val deciding_api = ShimmerBuilder(DecidingAgentAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
             .build()
 
-        val api2 = ShimmerBuilder(AutonomousAIApi::class)
-            .setAdapterClass(OpenAiAdapter::class)
-            .build()
-
-        val result = api.decideNextAction(MethodUtils.parseObjectForDecisionSchema(api2));
+        val agent = AutonomousAgent(agent_api, deciding_api)
+        val result = deciding_api.decide(agent_api.javaClass).get()
+        println(result)
     }
 
 }

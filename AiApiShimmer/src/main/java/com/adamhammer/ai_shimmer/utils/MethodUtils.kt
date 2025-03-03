@@ -324,10 +324,10 @@ object MethodUtils {
      * and returns a JSON string representing the object's capabilities, including method signatures,
      * associated annotations (such as Operation, Parameter, and ApiResponse), and a schema of the object's type.
      */
-    fun parseObjectForDecisionSchema(obj: ApiAdapter): String {
-        val kClass = obj.getBaseType()
+    fun parseObjectForDecisionSchema(kClass: Class<Any>): String {
+
         // Exclude methods inherited from Any.
-        val methods = kClass.java.methods.filter { it.declaringClass == kClass.java }
+        val methods = kClass.methods.filter { it.declaringClass == kClass }
 
         val methodsJson = methods.map { method ->
             buildJsonObject {
