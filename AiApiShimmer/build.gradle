@@ -21,8 +21,7 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     implementation("com.openai:openai-java:0.22.0")
-    implementation 'org.jetbrains.kotlin:kotlin-reflect:2.1.10'
-    // We are going to use Swagger annotations to assemble the contract
+    implementation 'org.jetbrains.kotlin:kotlin-reflect'
     api 'io.swagger.core.v3:swagger-annotations:2.2.28'
 
 
