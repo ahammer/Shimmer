@@ -1,7 +1,8 @@
 package com.adamhammer.ai_shimmer.adapters
 
 import BaseApiAdapter
-import com.adamhammer.ai_shimmer.utils.MethodUtils
+import com.adamhammer.ai_shimmer.utils.toJsonInvocationString
+import com.adamhammer.ai_shimmer.utils.toJsonStructureString
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
@@ -15,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import java.lang.reflect.Method
+
 
 public class OpenAiAdapter : BaseApiAdapter() {
     // Read API key from the environment variable.
@@ -36,9 +38,9 @@ public class OpenAiAdapter : BaseApiAdapter() {
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>, memory: Map<String, String>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
         val schemaDescription = method.getDeclaredAnnotation(ApiResponse::class.java)?.description ?: ""
-        val resultSchema = MethodUtils.buildResultSchema(resultClass)
-        val inputs = MethodUtils.generateSerializableRequest(method, args, memory)
-        val jsonContent = json.encodeToString(inputs)
+        val resultSchema = resultClass.toJsonStructureString()
+        val methodDeclaration = method.toJsonInvocationString(args)
+
 
 
         // 1) Define a system-level preamble to guide the model
@@ -69,7 +71,7 @@ In summary, follow these steps whenever you see a request:
 $systemPreamble
 
 # METHOD
-$jsonContent
+$methodDeclaration
 
 # RESULT for $schemaDescription
 $resultSchema""".trimIndent()

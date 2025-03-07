@@ -1,5 +1,5 @@
 package com.adamhammer.ai_shimmer
-import com.adamhammer.ai_shimmer.utils.MethodUtils
+import com.adamhammer.ai_shimmer.utils.toJsonStructureString
 import org.junit.jupiter.api.Test
 import kotlinx.serialization.Serializable
 
@@ -20,7 +20,7 @@ class ClassSchemaTest {
         val expect = """{
     "answer": "A resoundingly deep answer to the question"
 }"""
-        val result = MethodUtils.buildResultSchema(Answer::class)
+        val result = Answer::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 
@@ -39,7 +39,7 @@ class ClassSchemaTest {
         val expect = """{
     "color": "Enum color (RED/GREEN/BLUE)"
 }"""
-        val result = MethodUtils.buildResultSchema(EnumHolder::class)
+        val result = EnumHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 
@@ -58,7 +58,8 @@ class ClassSchemaTest {
         "A list of items"
     ]
 }"""
-        val result = MethodUtils.buildResultSchema(ListHolder::class)
+
+        val result = ListHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 
@@ -85,7 +86,7 @@ class ClassSchemaTest {
         "key": "value"
     }
 }"""
-        val result = MethodUtils.buildResultSchema(MapHolder::class)
+        val result = MapHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 
@@ -111,7 +112,7 @@ class ClassSchemaTest {
         "field": "Nested field"
     }
 }"""
-        val result = MethodUtils.buildResultSchema(ObjectHolder::class)
+        val result = ObjectHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 
@@ -151,7 +152,7 @@ class ClassSchemaTest {
         "A set of strings"
     ]
 }"""
-        val result = MethodUtils.buildResultSchema(Complex::class)
+        val result = Complex::class.toJsonStructureString()
         assertEquals(expect, result)
     }
 }

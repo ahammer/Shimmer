@@ -1,7 +1,7 @@
 package com.adamhammer.ai_shimmer.agents
 
 import com.adamhammer.ai_shimmer.ShimmerInstance
-import com.adamhammer.ai_shimmer.utils.MethodUtils
+import com.adamhammer.ai_shimmer.utils.toJsonClassMetadataString
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.media.Content
@@ -26,7 +26,7 @@ data class AiDecision(
 )
 
 fun <T : Any> DecidingAgentAPI.decide(shimmerInstance: ShimmerInstance<T>) : Future<AiDecision>{
-    val schema = MethodUtils.parseClassForMethodSchema(shimmerInstance.klass)
+    val schema = shimmerInstance.klass.toJsonClassMetadataString()
     return decideNextAction(schema)
 }
 

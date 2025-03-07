@@ -22,6 +22,7 @@ import kotlin.reflect.full.findAnnotations
 import kotlin.reflect.full.functions
 import kotlin.reflect.jvm.javaField
 
+/*
 object MethodUtils {
 
     // Create a shared Json instance.
@@ -356,3 +357,4 @@ object MethodUtils {
         return json.encodeToString(JsonObject.serializer(), snapshot)
     }
 }
+*/
