@@ -1,22 +1,20 @@
 package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
 
-// Swagger/OpenAPI annotations
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.media.Content
+// Import new custom annotations
+import com.adamhammer.ai_shimmer.annotations.AiSchema
+import com.adamhammer.ai_shimmer.annotations.AiOperation
+import com.adamhammer.ai_shimmer.annotations.AiParameter
+import com.adamhammer.ai_shimmer.annotations.AiResponse
 import org.junit.jupiter.api.Assertions.*
 
 // Define an enum for card rank including an UNDEFINED value.
 @Serializable
-@Schema(title = "CardRank", description = "The rank of a playing card")
+@AiSchema(title = "CardRank", description = "The rank of a playing card")
 enum class CardRank {
     UNDEFINED,
     TWO,
@@ -36,7 +34,7 @@ enum class CardRank {
 
 // Define an enum for card suit including an UNDEFINED value.
 @Serializable
-@Schema(title = "CardSuit", description = "The suit of a playing card")
+@AiSchema(title = "CardSuit", description = "The suit of a playing card")
 enum class CardSuit {
     UNDEFINED,
     HEARTS,
@@ -47,35 +45,35 @@ enum class CardSuit {
 
 // Define the response class which holds the drawn card information.
 @Serializable
-@Schema(
+@AiSchema(
     title = "HigherCardResponse",
     description = "The card drawn which is higher than the provided card. " +
             "If no higher card is available, both rank and suit will be set to UNDEFINED."
 )
 data class HigherCardResponse(
-    @field:Schema(title = "Rank", description = "The rank of the drawn card")
+    @field:AiSchema(title = "Rank", description = "The rank of the drawn card")
     val rank: CardRank = CardRank.UNDEFINED,
 
-    @field:Schema(title = "Suit", description = "The suit of the drawn card")
+    @field:AiSchema(title = "Suit", description = "The suit of the drawn card")
     val suit: CardSuit = CardSuit.UNDEFINED
 )
 
 // Define the API interface for drawing a higher card.
 interface HigherCardAPI {
-    @Operation(
+    @AiOperation(
         summary = "Draw Higher Card",
         description = "Draws a card with a higher rank than the given card. " +
                 "If no higher card is available, returns a card with undefined rank and suit."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "The drawn card as an object with rank and suit enums",
-        content = [Content(schema = Schema(implementation = HigherCardResponse::class))]
+        responseClass = HigherCardResponse::class
     )
     fun drawHigherCard(
-        @Parameter(description = "The current card value as an integer")
+        @AiParameter(description = "The current card value as an integer")
         value: Int,
 
-        @Parameter(description = "The current card suit as a card suit enum")
+        @AiParameter(description = "The current card suit as a card suit enum")
         suit: CardSuit
     ): Future<HigherCardResponse>
 }

@@ -2,66 +2,58 @@ package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-import com.adamhammer.ai_shimmer.interfaces.Memorize
+import com.adamhammer.ai_shimmer.annotations.*
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
 
-// Import Swagger/OpenAPI annotations
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.media.Content
+// Import new custom annotations
+
 import org.junit.jupiter.api.Assertions.*
 
 class AiApiShimmerTest {
 
     @Serializable
-    @Schema(title = "Question", description = "Holds info about the question")
+    @AiSchema(title = "Question", description = "Holds info about the question")
     class Question(
-        @field:Schema(title = "Question", description = "The question to be asked")
+        @field:AiSchema(title = "Question", description = "The question to be asked")
         val question: String = "",
-        @field:Schema(title = "Context", description = "Who is asking the Question")
+        @field:AiSchema(title = "Context", description = "Who is asking the Question")
         val context: String = ""
     )
 
     @Serializable
-    @Schema(title = "The Answer", description = "Holds the answer to the question.")
+    @AiSchema(title = "The Answer", description = "Holds the answer to the question.")
     class Answer(
-        @field:Schema(title = "Answer", description = "A resoundingly deep answer to the question", )
+        @field:AiSchema(title = "Answer", description = "A resoundingly deep answer to the question")
         val answer: String = ""
     )
 
     interface QuestionAPI {
-        @Operation(
+        @AiOperation(
             summary = "Ask",
             description = "Provide an in-depth answer to the question within its context."
         )
-
-        @ApiResponse(
+        @AiResponse(
             description = "The answer to the question",
-            content = [Content(schema = Schema(implementation = Answer::class))]
+            responseClass = Answer::class
         )
-
         fun askStruct(
-            @Parameter(description = "The question and its context for the API call")
+            @AiParameter(description = "The question and its context for the API call")
             question: Question?
         ): Future<Answer?>
 
-        @Operation(
+        @AiOperation(
             summary = "AskString",
             description = "Provide an in-depth answer to the question within its context, returning a string response."
         )
-
-        @ApiResponse(
+        @AiResponse(
             description = "The answer as a string",
-            content = [Content(schema = Schema(implementation = String::class))],
+            responseClass = String::class
         )
-
         @Memorize("The last answer to the question.")
         fun askString(
-            @Parameter(description = "The question and its context for the API call")
+            @AiParameter(description = "The question and its context for the API call")
             question: Question?
         ): Future<String?>
     }
@@ -91,11 +83,9 @@ class AiApiShimmerTest {
 
     @Test
     fun testStringApi() {
-
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
-            .build()
-            .api
+            .build().api
             .askString(Question("What is the greatest rodent?", "A small insect asks this question"))
             .get()
 

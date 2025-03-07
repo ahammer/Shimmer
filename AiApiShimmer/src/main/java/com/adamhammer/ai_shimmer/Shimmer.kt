@@ -1,6 +1,7 @@
 import com.adamhammer.ai_shimmer.ShimmerInstance
+import com.adamhammer.ai_shimmer.annotations.Memorize
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
-import com.adamhammer.ai_shimmer.interfaces.Memorize
+
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType

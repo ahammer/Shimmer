@@ -8,13 +8,14 @@ import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
-import java.lang.reflect.Method
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.responses.ApiResponse
 import kotlin.reflect.full.declaredFunctions
+import java.lang.reflect.Method
 
+// New custom annotations replacing Swagger
+import com.adamhammer.ai_shimmer.annotations.AiOperation
+import com.adamhammer.ai_shimmer.annotations.AiParameter
+import com.adamhammer.ai_shimmer.annotations.AiResponse
+import com.adamhammer.ai_shimmer.annotations.AiSchema
 
 private val json = Json { prettyPrint = true }
 
@@ -26,18 +27,24 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
     }
     else -> buildJsonObject {
         declaredMemberProperties.forEach { prop ->
-            val schemaDesc = prop.findAnnotation<Schema>()?.description ?: "optional"
+            // If available, use AiSchema annotation to provide a description
+            val schemaDesc = prop.findAnnotation<AiSchema>()?.description ?: "optional"
             val propType = prop.returnType.classifier as? KClass<*>
 
             val propSchema = when {
-                propType?.java?.isEnum == true -> JsonArray(propType.java.enumConstants.map { JsonPrimitive(it.toString()) })
-                propType == Map::class -> buildJsonObject { put("key", JsonPrimitive("value")) }
-                propType in setOf(List::class, Set::class) -> JsonArray(listOf(JsonPrimitive(schemaDesc)))
-                propType in setOf(String::class, Int::class, Long::class, Double::class, Float::class, Boolean::class) -> JsonPrimitive(schemaDesc)
-                propType != null -> propType.toJsonStructure()
-                else -> JsonPrimitive(schemaDesc)
+                propType?.java?.isEnum == true ->
+                    JsonArray(propType.java.enumConstants.map { JsonPrimitive(it.toString()) })
+                propType == Map::class ->
+                    buildJsonObject { put("key", JsonPrimitive("value")) }
+                propType in setOf(List::class, Set::class) ->
+                    JsonArray(listOf(JsonPrimitive(schemaDesc)))
+                propType in setOf(String::class, Int::class, Long::class, Double::class, Float::class, Boolean::class) ->
+                    JsonPrimitive(schemaDesc)
+                propType != null ->
+                    propType.toJsonStructure()
+                else ->
+                    JsonPrimitive(schemaDesc)
             }
-
             put(prop.name, propSchema)
         }
     }
@@ -45,38 +52,33 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
 
 fun KClass<*>.toJsonStructureString(): String = json.encodeToString(toJsonStructure())
 
-
-
 // Extension method for method invocation metadata
 fun Method.toJsonInvocation(args: Array<out Any>? = null): JsonObject = buildJsonObject {
-    val operation = getAnnotation(Operation::class.java)
-
+    val operation = getAnnotation(AiOperation::class.java)
     put("method", buildString {
         append(name)
-        operation?.description?.takeIf { it.isNotBlank() }?.let { append(": $it") }
+        operation?.let {
+            when {
+                it.summary.isNotBlank() -> append(": ${it.summary}")
+                it.description.isNotBlank() -> append(": ${it.description}")
+            }
+        }
     })
 
     put("parameters", JsonArray(parameters.mapIndexed { index, param ->
         buildJsonObject {
-            put("description", JsonPrimitive(param.getAnnotation(Parameter::class.java)?.description.orEmpty()))
+            put("description", JsonPrimitive(param.getAnnotation(AiParameter::class.java)?.description.orEmpty()))
             val argValue = args?.getOrNull(index)
             put("value", argValue.toJsonElement())
         }
     }))
 
-    val responseSchema = getAnnotation(ApiResponse::class.java)
-        ?.content?.firstOrNull()
-        ?.schema
-        ?.implementation
-        ?: returnType.kotlin
+    val responseSchema = getAnnotation(AiResponse::class.java)?.responseClass ?: returnType.kotlin
     put("resultSchema", responseSchema.toJsonStructure())
 }
 
-
-
-
-
-fun Method.toJsonInvocationString(args: Array<out Any>? = null): String = json.encodeToString(toJsonInvocation(args))
+fun Method.toJsonInvocationString(args: Array<out Any>? = null): String =
+    json.encodeToString(toJsonInvocation(args))
 
 // Extension to serialize an object to JsonElement directly
 @OptIn(InternalSerializationApi::class)
@@ -98,16 +100,21 @@ fun KClass<*>.toJsonClassMetadata(): JsonObject = buildJsonObject {
     put("methods", JsonArray(declaredFunctions.map { method ->
         buildJsonObject {
             put("name", method.name)
-            method.findAnnotation<Operation>()?.description?.takeIf { it.isNotBlank() }?.let {
-                put("description", it)
+            method.findAnnotation<AiOperation>()?.let {
+                when {
+                    it.summary.isNotBlank() -> put("summary", it.summary)
+                    it.description.isNotBlank() -> put("description", it.description)
+                    else -> {}
+                }
             }
             put("parameters", JsonArray(method.parameters.mapNotNull { param ->
-                param.findAnnotation<Parameter>()?.description?.takeIf { it.isNotBlank() }?.let {
-                    buildJsonObject { put("description", it) }
+                param.findAnnotation<AiParameter>()?.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                    buildJsonObject { put("description", desc) }
                 }
             }))
         }
     }))
 }
 
-fun KClass<*>.toJsonClassMetadataString(): String = json.encodeToString(toJsonClassMetadata())
+fun KClass<*>.toJsonClassMetadataString(): String =
+    json.encodeToString(toJsonClassMetadata())

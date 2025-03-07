@@ -3,86 +3,79 @@ package com.adamhammer.ai_shimmer
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
 import com.adamhammer.ai_shimmer.agents.DecidingAgentAPI
 import com.adamhammer.ai_shimmer.agents.decide
+import com.adamhammer.ai_shimmer.annotations.*
 import com.adamhammer.ai_shimmer.interfaces.*
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.media.Content
-import io.swagger.v3.oas.annotations.media.Schema
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Future
 
-@Schema(description = "Autonomous that reflects on the user input and delivers a result when confidentially")
+@AiSchema(description = "Autonomous that reflects on the user input and delivers a result when confidentially")
 interface AutonomousAIApi {
 
-    @Operation(
+    @AiOperation(
         description = "Accept input from the user and try and understand it"
     )
-    @ApiResponse(
+    @AiResponse(
         description = "Rephrase and clarify the users input.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "Users Intent")
     @Subscribe(channel = "User Input")
     fun understand(
-        @Parameter(description = "The users input we are trying to understand.")
-        data: String): Future<String>
+        @AiParameter(description = "The users input we are trying to understand.")
+        data: String
+    ): Future<String>
 
-    @Operation(
+    @AiOperation(
         description = "Process the gathered data to extract insights and identify potential actions."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "Result of the analysis phase.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "analyze")
     fun analyze(): Future<String>
 
-    @Operation(
+    @AiOperation(
         description = "Devise a strategy based on current insights and previous memory to decide the next steps."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "Result of the planning process.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "plan")
     fun plan(): Future<String>
 
-    @Operation(
+    @AiOperation(
         description = "Reflect on the current state and provide the update."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "Result of the reflection process.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "reflect")
     fun reflect(): Future<String>
 
-    @Operation(
+    @AiOperation(
         description = "Deliver the result"
     )
-    @ApiResponse(
+    @AiResponse(
         description = "The final result/communication",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "act")
     @Publish("output")
     fun act(): Future<String>
 }
 
-
-
-
-// The BasicAgent class that exposes only the ideate method.
-// It accepts a BasicAIApi instance (built with AiApiBuilder) in its constructor.
+// The AutonomousAgent class that exposes a step method.
+// It accepts an AutonomousAIApi instance (built with AiApiBuilder) and a DecidingAgentAPI in its constructor.
 class AutonomousAgent(private val api: AutonomousAIApi, private val decider: DecidingAgentAPI) {
-    fun step()  {
-
+    fun step() {
         // next.execute(this or something)
     }
 }
 
-// Test class for BasicAgent.
+// Test class for the agent and decider integration.
 class DecidingAgentTest {
 
     @Test
@@ -96,12 +89,10 @@ class DecidingAgentTest {
             .build()
 
         val agent_api = agentAdapter.api
-
         val deciding_api = deciderAdapter.api
 
         val agent = AutonomousAgent(agent_api, deciding_api)
         val result = deciding_api.decide(agentAdapter).get()
         println(result)
     }
-
 }

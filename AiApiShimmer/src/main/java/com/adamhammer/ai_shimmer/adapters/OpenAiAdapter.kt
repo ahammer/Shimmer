@@ -8,8 +8,6 @@ import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
 import com.openai.models.ChatCompletionCreateParams
 import com.openai.models.ChatModel
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.responses.ApiResponse
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -37,11 +35,8 @@ public class OpenAiAdapter : BaseApiAdapter() {
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>, memory: Map<String, String>): R {
         // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
-        val schemaDescription = method.getDeclaredAnnotation(ApiResponse::class.java)?.description ?: ""
         val resultSchema = resultClass.toJsonStructureString()
         val methodDeclaration = method.toJsonInvocationString(args)
-
-
 
         // 1) Define a system-level preamble to guide the model
         val systemPreamble = """
@@ -73,7 +68,7 @@ $systemPreamble
 # METHOD
 $methodDeclaration
 
-# RESULT for $schemaDescription
+# RESULT
 $resultSchema""".trimIndent()
 
         // Create a ChatCompletion request using the official API.

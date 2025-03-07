@@ -3,15 +3,14 @@ import com.adamhammer.ai_shimmer.utils.toJsonStructureString
 import org.junit.jupiter.api.Test
 import kotlinx.serialization.Serializable
 
-import io.swagger.v3.oas.annotations.media.Schema
+import com.adamhammer.ai_shimmer.annotations.AiSchema
 import org.junit.jupiter.api.Assertions.*
-
 
 class ClassSchemaTest {
     @Serializable
-    @Schema(title = "The Answer", description = "Holds the answer to the question.")
+    @AiSchema(title = "The Answer", description = "Holds the answer to the question.")
     class Answer(
-        @field:Schema(title = "Answer", description = "A resoundingly deep answer to the question")
+        @field:AiSchema(title = "Answer", description = "A resoundingly deep answer to the question")
         val answer: String = ""
     )
 
@@ -28,9 +27,9 @@ class ClassSchemaTest {
     enum class Color { RED, GREEN, BLUE }
 
     @Serializable
-    @Schema(title = "EnumHolder", description = "Holds an enum value")
+    @AiSchema(title = "EnumHolder", description = "Holds an enum value")
     class EnumHolder(
-        @field:Schema(title = "Color", description = "The color enum")
+        @field:AiSchema(title = "Color", description = "The color enum")
         val color: Color
     )
 
@@ -45,9 +44,9 @@ class ClassSchemaTest {
 
     // 2) With an embedded list
     @Serializable
-    @Schema(title = "ListHolder", description = "Holds a list of strings")
+    @AiSchema(title = "ListHolder", description = "Holds a list of strings")
     class ListHolder(
-        @field:Schema(title = "Items", description = "A list of items")
+        @field:AiSchema(title = "Items", description = "A list of items")
         val items: List<String>
     )
 
@@ -65,17 +64,17 @@ class ClassSchemaTest {
 
     // 3) With an embedded set
     @Serializable
-    @Schema(title = "SetHolder", description = "Holds a set of strings")
+    @AiSchema(title = "SetHolder", description = "Holds a set of strings")
     class SetHolder(
-        @field:Schema(title = "Elements", description = "A set of elements")
+        @field:AiSchema(title = "Elements", description = "A set of elements")
         val elements: Set<String>
     )
 
     // 4) With an embedded map
     @Serializable
-    @Schema(title = "MapHolder", description = "Holds a map of strings")
+    @AiSchema(title = "MapHolder", description = "Holds a map of strings")
     class MapHolder(
-        @field:Schema(title = "Mapping", description = "A mapping of key-value pairs")
+        @field:AiSchema(title = "Mapping", description = "A mapping of key-value pairs")
         val mapping: Map<String, String>
     )
 
@@ -92,16 +91,16 @@ class ClassSchemaTest {
 
     // 5) With an embedded object
     @Serializable
-    @Schema(title = "Nested", description = "A nested object")
+    @AiSchema(title = "Nested", description = "A nested object")
     class Nested(
-        @field:Schema(title = "Field", description = "Nested field")
+        @field:AiSchema(title = "Field", description = "Nested field")
         val field: String
     )
 
     @Serializable
-    @Schema(title = "ObjectHolder", description = "Holds an object")
+    @AiSchema(title = "ObjectHolder", description = "Holds an object")
     class ObjectHolder(
-        @field:Schema(title = "Nested", description = "A nested object")
+        @field:AiSchema(title = "Nested", description = "A nested object")
         val nested: Nested
     )
 
@@ -118,19 +117,19 @@ class ClassSchemaTest {
 
     // 6) A complex example with all of the above.
     @Serializable
-    @Schema(title = "Complex", description = "A complex object with various fields")
+    @AiSchema(title = "Complex", description = "A complex object with various fields")
     class Complex(
-        @field:Schema(title = "Primitive", description = "A simple string")
+        @field:AiSchema(title = "Primitive", description = "A simple string")
         val primitive: String,
-        @field:Schema(title = "Enum", description = "An enum field")
+        @field:AiSchema(title = "Enum", description = "An enum field")
         val color: Color,
-        @field:Schema(title = "List", description = "A list of strings")
+        @field:AiSchema(title = "List", description = "A list of strings")
         val list: List<String>,
-        @field:Schema(title = "Set", description = "A set of strings")
+        @field:AiSchema(title = "Set", description = "A set of strings")
         val set: Set<String>,
-        @field:Schema(title = "Map", description = "A map of strings")
+        @field:AiSchema(title = "Map", description = "A map of strings")
         val map: Map<String, String>,
-        @field:Schema(title = "Object", description = "An embedded object")
+        @field:AiSchema(title = "Object", description = "An embedded object")
         val nested: Nested
     )
 

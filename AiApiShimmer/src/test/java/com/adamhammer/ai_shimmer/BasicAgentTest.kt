@@ -1,13 +1,8 @@
 package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-import com.adamhammer.ai_shimmer.interfaces.Memorize
+import com.adamhammer.ai_shimmer.annotations.*
 import kotlinx.serialization.Serializable
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.media.Content
 import java.util.concurrent.Future
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -17,19 +12,19 @@ import org.junit.jupiter.api.Test
 // =============================================================================
 
 @Serializable
-@Schema(title = "Idea", description = "The final idea produced by the agent.")
+@AiSchema(title = "Idea", description = "The final idea produced by the agent.")
 data class Idea(
-    @field:Schema(title = "Content", description = "The content of the final idea.")
+    @field:AiSchema(title = "Content", description = "The content of the final idea.")
     val content: String
 )
 
 @Serializable
-@Schema(
+@AiSchema(
     title = "IdeationResult",
     description = "The complete ideation report including the final idea."
 )
 data class IdeationResult(
-    @field:Schema(title = "Idea", description = "The final idea produced by the agent.")
+    @field:AiSchema(title = "Idea", description = "The final idea produced by the agent.")
     val idea: Idea
 )
 
@@ -38,38 +33,38 @@ data class IdeationResult(
 // =============================================================================
 
 interface SimpleAIApi {
-    @Operation(
+    @AiOperation(
         summary = "Initiate",
         description = "Generates an initial set of ideas based on the provided concept."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "Initial ideas as a plain text string.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     @Memorize(label = "initial ideas")
     fun initiate(
-        @Parameter(description = "A phrase or concept to spark the ideation process.")
+        @AiParameter(description = "A phrase or concept to spark the ideation process.")
         input: String
     ): Future<String>
 
-    @Operation(
+    @AiOperation(
         summary = "Expand",
         description = "Expands and elaborates on the initial ideas by adding more detail."
     )
-    @ApiResponse(
-        description = "Expanded ideas, Generate a lot (like 20+, with diversity) as plain text.",
-        content = [Content(schema = Schema(implementation = String::class))]
+    @AiResponse(
+        description = "Expanded ideas, generate a lot (like 20+, with diversity) as plain text.",
+        responseClass = String::class
     )
     @Memorize(label = "expanded ideas")
     fun expand(): Future<String>
 
-    @Operation(
+    @AiOperation(
         summary = "Generate Markdown Report",
-        description = "Generates a detailed markdown on the users idea. You can go verbose, detailed and well formatted"
+        description = "Generates a detailed markdown on the user's idea. You can go verbose, detailed and well formatted."
     )
-    @ApiResponse(
+    @AiResponse(
         description = "A markdown-formatted report.",
-        content = [Content(schema = Schema(implementation = String::class))]
+        responseClass = String::class
     )
     fun report(): Future<String>
 }
