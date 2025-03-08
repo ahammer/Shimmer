@@ -26,9 +26,44 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
         put("enum", JsonArray(java.enumConstants.map { JsonPrimitive(it.toString()) }))
     }
     else -> buildJsonObject {
+        // First check if the class itself has an AiSchema annotation
+        val classAnnotation = findAnnotation<AiSchema>()
+        
         declaredMemberProperties.forEach { prop ->
-            // If available, use AiSchema annotation to provide a description
-            val schemaDesc = prop.findAnnotation<AiSchema>()?.description ?: "optional"
+            // Look for field annotations in Java reflection
+            val javaField = try {
+                java.getDeclaredField(prop.name)
+            } catch (e: NoSuchFieldException) {
+                null
+            }
+            
+            // Try to find AiSchema annotation on the field
+            val fieldAnnotation = javaField?.getAnnotation(AiSchema::class.java)
+            
+            // Use the most specific description available
+            val schemaDesc = when {
+                // First priority: field annotation
+                fieldAnnotation != null && fieldAnnotation.description.isNotBlank() -> 
+                    fieldAnnotation.description
+                fieldAnnotation != null && fieldAnnotation.title.isNotBlank() -> 
+                    fieldAnnotation.title
+                
+                // Second priority: property annotation
+                prop.findAnnotation<AiSchema>()?.description?.isNotBlank() == true -> 
+                    prop.findAnnotation<AiSchema>()!!.description
+                prop.findAnnotation<AiSchema>()?.title?.isNotBlank() == true -> 
+                    prop.findAnnotation<AiSchema>()!!.title
+                
+                // Third priority: class annotation
+                classAnnotation?.description?.isNotBlank() == true -> 
+                    "${classAnnotation.description} - ${prop.name}"
+                classAnnotation?.title?.isNotBlank() == true -> 
+                    "${classAnnotation.title} - ${prop.name}"
+                
+                // Default fallback
+                else -> prop.name
+            }
+            
             val propType = prop.returnType.classifier as? KClass<*>
 
             val propSchema = when {

@@ -35,7 +35,6 @@ public class OpenAiAdapter : BaseApiAdapter() {
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>, memory: Map<String, String>): R {
         // Build prompt parts from method metadata, parameter values, memory, and the expected JSON schema.
-        val resultSchema = resultClass.toJsonStructureString()
         val methodDeclaration = method.toJsonInvocationString(args, memory)
 
         // 1) Define a system-level preamble to guide the model
@@ -66,10 +65,7 @@ In summary, follow these steps whenever you see a request:
 $systemPreamble
 
 # METHOD
-$methodDeclaration
-
-# RESULT
-$resultSchema""".trimIndent()
+$methodDeclaration""".trimIndent()
 
         // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
