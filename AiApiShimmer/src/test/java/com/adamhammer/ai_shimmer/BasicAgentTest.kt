@@ -102,7 +102,7 @@ class SimpleAgent(private val api: SimpleAIApi) {
 // Test class for the SimpleAgent using the simplified API.
 // =============================================================================
 
-class SimpleAgentTest {
+class BasicAgentTest {
 
     @Test
     fun testIdeate() {

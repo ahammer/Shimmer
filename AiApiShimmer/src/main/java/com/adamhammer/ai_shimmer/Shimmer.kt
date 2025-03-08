@@ -1,3 +1,4 @@
+package com.adamhammer.ai_shimmer
 import com.adamhammer.ai_shimmer.ShimmerInstance
 import com.adamhammer.ai_shimmer.annotations.Memorize
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
@@ -10,7 +11,7 @@ import java.util.concurrent.Future
 import kotlin.reflect.KClass
 
 // The invocation handler.
-internal class Shimmer<T : Any>(
+class Shimmer<T : Any>(
     private val adapter: ApiAdapter,
 ) : InvocationHandler {
 

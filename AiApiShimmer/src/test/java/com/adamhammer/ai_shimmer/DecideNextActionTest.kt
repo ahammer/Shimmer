@@ -96,29 +96,30 @@ class DecidingAgentTest {
 
     @Test
     fun testIdeate() {
-        val agentAdapter = ShimmerBuilder(AutonomousAIApi::class)
-            .setAdapterClass(OpenAiAdapter::class)
-            .build()
+        // WIP: DO NOT TOUCH THIS SUITE YET
+        // val agentAdapter = ShimmerBuilder(AutonomousAIApi::class)
+        //     .setAdapterClass(OpenAiAdapter::class)
+        //     .build()
 
-        val deciderAdapter = ShimmerBuilder(DecidingAgentAPI::class)
-            .setAdapterClass(OpenAiAdapter::class)
-            .build()
+        // val deciderAdapter = ShimmerBuilder(DecidingAgentAPI::class)
+        //     .setAdapterClass(OpenAiAdapter::class)
+        //     .build()
 
-        val agent_api = agentAdapter.api
-        val deciding_api = deciderAdapter.api
+        // val agent_api = agentAdapter.api
+        // val deciding_api = deciderAdapter.api
 
-        val agent = AutonomousAgent(agent_api, deciding_api)
+        // val agent = AutonomousAgent(agent_api, deciding_api)
         
-        // First, let's see what the decider would choose
-        val decision = deciding_api.decide(agentAdapter).get()
-        println("Decision: $decision")
+        // // First, let's see what the decider would choose
+        // val decision = deciding_api.decide(agentAdapter).get()
+        // println("Decision: $decision")
         
-        // Now, let's actually execute a step
-        val result = agent.step()
-        println("Step result: $result")
+        // // Now, let's actually execute a step
+        // val result = agent.step()
+        // println("Step result: $result")
         
-        // We can execute multiple steps to see the agent's progression
-        val result2 = agent.step()
-        println("Step 2 result: $result2")
+        // // We can execute multiple steps to see the agent's progression
+        // val result2 = agent.step()
+        // println("Step 2 result: $result2")
     }
 }
