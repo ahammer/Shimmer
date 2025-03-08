@@ -119,6 +119,11 @@ class BasicAgentTest {
                 "Generate a report on potential Kotlin interfaces to manage this API and delegates."
         val result = agent.ideate(input)
 
+        // Validate the result
         assertNotNull(result.idea, "Final idea should not be null")
+        assertTrue(result.idea.content.isNotBlank(), "Final idea content should not be blank")
+        
+        // Print the result for manual inspection
+        println("Final idea content: ${result.idea.content}")
     }
 }

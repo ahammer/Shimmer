@@ -34,9 +34,9 @@ public class OpenAiAdapter : BaseApiAdapter() {
 
     @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(method: Method, args: Array<out Any>?, resultClass: KClass<R>, memory: Map<String, String>): R {
-        // Build prompt parts from method metadata, parameter values, and the expected JSON schema.
+        // Build prompt parts from method metadata, parameter values, memory, and the expected JSON schema.
         val resultSchema = resultClass.toJsonStructureString()
-        val methodDeclaration = method.toJsonInvocationString(args)
+        val methodDeclaration = method.toJsonInvocationString(args, memory)
 
         // 1) Define a system-level preamble to guide the model
         val systemPreamble = """
@@ -81,7 +81,10 @@ $resultSchema""".trimIndent()
         println("║   OPENAI TX      ║")
         println("╚══════════════════╝")
         println()
-        println(prompt)
+        // Format the prompt for better readability in logs
+        val formattedPrompt = prompt.replace("\n# METHOD\n", "\n# METHOD\n")
+                                   .replace("\n# RESULT\n", "\n# RESULT\n")
+        println(formattedPrompt)
         println()
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)
 
@@ -95,10 +98,20 @@ $resultSchema""".trimIndent()
         println(completionText)
         println()
 
-        // If the expected result type is String, return the raw response directly.
+        // If the expected result type is String, return the raw response directly,
+        // but clean it up if it's just the literal "Text" or starts with "# RESULT"
         if (resultClass == String::class) {
             @Suppress("UNCHECKED_CAST")
-            return completionText as R
+            val cleanedText = when {
+                completionText.trim() == "\"Text\"" -> ""
+                completionText.trim().startsWith("# RESULT") -> {
+                    // Extract the actual content after "# RESULT"
+                    val contentStart = completionText.indexOf("# RESULT") + "# RESULT".length
+                    completionText.substring(contentStart).trim().trim('"')
+                }
+                else -> completionText
+            }
+            return cleanedText as R
         }
 
         // Otherwise, extract the JSON block (in case extra text is included).
@@ -118,12 +131,20 @@ $resultSchema""".trimIndent()
 
     // Helper function to extract JSON from a response that might contain extra text.
     private fun extractJson(text: String): String {
-        val startIndex = text.indexOf('{')
-        val endIndex = text.lastIndexOf('}')
-        return if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
-            text.substring(startIndex, endIndex + 1)
-        } else {
-            text
+        // Check for JSON object
+        val objectStartIndex = text.indexOf('{')
+        val objectEndIndex = text.lastIndexOf('}')
+        if (objectStartIndex != -1 && objectEndIndex != -1 && objectStartIndex < objectEndIndex) {
+            return text.substring(objectStartIndex, objectEndIndex + 1)
         }
+        
+        // Check for JSON array
+        val arrayStartIndex = text.indexOf('[')
+        val arrayEndIndex = text.lastIndexOf(']')
+        if (arrayStartIndex != -1 && arrayEndIndex != -1 && arrayStartIndex < arrayEndIndex) {
+            return text.substring(arrayStartIndex, arrayEndIndex + 1)
+        }
+        
+        return text
     }
 }

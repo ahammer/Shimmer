@@ -53,7 +53,7 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
 fun KClass<*>.toJsonStructureString(): String = json.encodeToString(toJsonStructure())
 
 // Extension method for method invocation metadata
-fun Method.toJsonInvocation(args: Array<out Any>? = null): JsonObject = buildJsonObject {
+fun Method.toJsonInvocation(args: Array<out Any>? = null, memory: Map<String, String> = emptyMap()): JsonObject = buildJsonObject {
     val operation = getAnnotation(AiOperation::class.java)
     put("method", buildString {
         append(name)
@@ -73,12 +73,25 @@ fun Method.toJsonInvocation(args: Array<out Any>? = null): JsonObject = buildJso
         }
     }))
 
+    // Include memory in the method invocation JSON
+    if (memory.isNotEmpty()) {
+        put("memory", buildJsonObject {
+            memory.forEach { (key, value) ->
+                put(key, JsonPrimitive(value))
+            }
+        })
+    }
+
     val responseSchema = getAnnotation(AiResponse::class.java)?.responseClass ?: returnType.kotlin
     put("resultSchema", responseSchema.toJsonStructure())
 }
 
-fun Method.toJsonInvocationString(args: Array<out Any>? = null): String =
-    json.encodeToString(toJsonInvocation(args))
+// Custom JSON encoder to ensure proper JSON formatting with commas between fields
+fun Method.toJsonInvocationString(args: Array<out Any>? = null, memory: Map<String, String> = emptyMap()): String {
+    val jsonObject = toJsonInvocation(args, memory)
+    return json.encodeToString(jsonObject)
+}
+
 
 // Extension to serialize an object to JsonElement directly
 @OptIn(InternalSerializationApi::class)
