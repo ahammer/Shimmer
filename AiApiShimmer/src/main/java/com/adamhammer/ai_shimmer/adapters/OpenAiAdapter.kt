@@ -1,6 +1,6 @@
 package com.adamhammer.ai_shimmer.adapters
 
-import BaseApiAdapter
+import com.adamhammer.ai_shimmer.adapters.BaseApiAdapter
 import com.adamhammer.ai_shimmer.utils.toJsonInvocationString
 import com.adamhammer.ai_shimmer.utils.toJsonStructureString
 import com.openai.client.OpenAIClient

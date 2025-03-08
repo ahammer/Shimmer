@@ -70,8 +70,24 @@ interface AutonomousAIApi {
 // The AutonomousAgent class that exposes a step method.
 // It accepts an AutonomousAIApi instance (built with AiApiBuilder) and a DecidingAgentAPI in its constructor.
 class AutonomousAgent(private val api: AutonomousAIApi, private val decider: DecidingAgentAPI) {
-    fun step() {
-        // next.execute(this or something)
+    fun step(): String {
+        // Get the next action to take
+        val decision = decider.decide(ShimmerInstance(api, mutableMapOf(), AutonomousAIApi::class)).get()
+        
+        // Execute the action based on the decision
+        val result = when (decision.method) {
+            "understand" -> {
+                val data = decision.args["data"] ?: throw IllegalArgumentException("Missing 'data' argument for understand method")
+                api.understand(data).get()
+            }
+            "analyze" -> api.analyze().get()
+            "plan" -> api.plan().get()
+            "reflect" -> api.reflect().get()
+            "act" -> api.act().get()
+            else -> throw IllegalArgumentException("Unknown method: ${decision.method}")
+        }
+        
+        return result
     }
 }
 
@@ -92,7 +108,17 @@ class DecidingAgentTest {
         val deciding_api = deciderAdapter.api
 
         val agent = AutonomousAgent(agent_api, deciding_api)
-        val result = deciding_api.decide(agentAdapter).get()
-        println(result)
+        
+        // First, let's see what the decider would choose
+        val decision = deciding_api.decide(agentAdapter).get()
+        println("Decision: $decision")
+        
+        // Now, let's actually execute a step
+        val result = agent.step()
+        println("Step result: $result")
+        
+        // We can execute multiple steps to see the agent's progression
+        val result2 = agent.step()
+        println("Step 2 result: $result2")
     }
 }

@@ -1,6 +1,6 @@
 package com.adamhammer.ai_shimmer
 
-import Shimmer
+import com.adamhammer.ai_shimmer.Shimmer
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass

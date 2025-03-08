@@ -1,6 +1,6 @@
 package com.adamhammer.ai_shimmer.adapters
 
-import BaseApiAdapter
+import com.adamhammer.ai_shimmer.adapters.BaseApiAdapter
 
 import java.lang.reflect.Method
 import kotlin.reflect.KClass
