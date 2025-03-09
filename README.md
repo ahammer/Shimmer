@@ -41,7 +41,6 @@ val answer = api.askQuestion("What is the meaning of life?").get()
 ## 📚 Table of Contents
 
 - [✨ Features](#-features)
-- [🔧 Installation](#-installation)
 - [🏁 Quick Start Guide](#-quick-start-guide)
 - [🧠 Conceptual Overview](#-conceptual-overview)
 - [🎭 Use Cases](#-use-cases)
@@ -71,39 +70,7 @@ val answer = api.askQuestion("What is the meaning of life?").get()
 
 ## 🔧 Installation
 
-Add the dependency to your project:
-
-<details open>
-<summary><b>Gradle (Kotlin DSL)</b></summary>
-
-```kotlin
-dependencies {
-    implementation("com.adamhammer:ai-api-shimmer:1.0.0")
-}
-```
-</details>
-
-<details>
-<summary><b>Gradle (Groovy)</b></summary>
-
-```groovy
-dependencies {
-    implementation 'com.adamhammer:ai-api-shimmer:1.0.0'
-}
-```
-</details>
-
-<details>
-<summary><b>Maven</b></summary>
-
-```xml
-<dependency>
-    <groupId>com.adamhammer</groupId>
-    <artifactId>ai-api-shimmer</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-</details>
+Get it from source, not released.
 
 ---
 
