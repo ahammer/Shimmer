@@ -2,6 +2,7 @@ package com.adamhammer.ai_shimmer.adapters
 
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.model.PromptContext
+import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import kotlin.reflect.KClass
 
 /**
@@ -21,7 +22,14 @@ class StubAdapter : ApiAdapter {
             Boolean::class -> false as R
             else -> when {
                 resultClass.java.isEnum -> resultClass.java.enumConstants.first() as R
-                else -> resultClass.java.getDeclaredConstructor().newInstance()
+                else -> try {
+                    resultClass.java.getDeclaredConstructor().newInstance()
+                } catch (e: NoSuchMethodException) {
+                    throw ShimmerConfigurationException(
+                        "StubAdapter cannot create an instance of ${resultClass.simpleName}: " +
+                        "no no-arg constructor found. Ensure the class has a no-arg constructor or all-default parameters."
+                    )
+                }
             }
         }
     }

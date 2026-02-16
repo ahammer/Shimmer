@@ -68,6 +68,27 @@ class OpenAiAdapterTest {
         assertEquals("{\"outer\": {\"inner\": true}}", result)
     }
 
+    @Test
+    fun `extractJson strips markdown code fences`() {
+        val text = "Here is the result:\n```json\n{\"value\": \"fenced\"}\n```\nDone."
+        val result = adapter.extractJson(text)
+        assertEquals("{\"value\": \"fenced\"}", result)
+    }
+
+    @Test
+    fun `extractJson strips plain code fences without language tag`() {
+        val text = "```\n{\"value\": \"plain-fence\"}\n```"
+        val result = adapter.extractJson(text)
+        assertEquals("{\"value\": \"plain-fence\"}", result)
+    }
+
+    @Test
+    fun `extractJson extracts array from fenced block`() {
+        val text = "```json\n[1, 2, 3]\n```"
+        val result = adapter.extractJson(text)
+        assertEquals("[1, 2, 3]", result)
+    }
+
     // ── handleRequest for data class results ───────────────────────────────
 
     @Test
@@ -241,5 +262,69 @@ class OpenAiAdapterTest {
         assertThrows(RuntimeException::class.java) {
             adapter.handleRequest(context, SimpleResult::class)
         }
+    }
+
+    // ── enum deserialization (offline) ──────────────────────────────────────
+
+    @Test
+    fun `handleRequest deserializes enum result from JSON object`() {
+        stubCompletion("{\"color\": \"BLUE\"}")
+
+        val context = PromptContext(
+            systemInstructions = "test",
+            methodInvocation = "{}",
+            memory = emptyMap()
+        )
+
+        val result = adapter.handleRequest(context, EnumResult::class)
+        assertEquals(TestColor.BLUE, result.color)
+    }
+
+    @Test
+    fun `handleRequest deserializes enum result wrapped in markdown`() {
+        stubCompletion("```json\n{\"color\": \"GREEN\"}\n```")
+
+        val context = PromptContext(
+            systemInstructions = "test",
+            methodInvocation = "{}",
+            memory = emptyMap()
+        )
+
+        val result = adapter.handleRequest(context, EnumResult::class)
+        assertEquals(TestColor.GREEN, result.color)
+    }
+
+    // ── memory encoding ────────────────────────────────────────────────────
+
+    @Test
+    fun `handleRequest embeds JSON memory values as structured JSON not escaped strings`() {
+        val capturedParams = slot<ChatCompletionCreateParams>()
+
+        val chatService = mockk<com.openai.services.blocking.ChatService>()
+        val completionService = mockk<com.openai.services.blocking.chat.CompletionService>()
+        val choice = mockk<ChatCompletion.Choice>()
+        val message = mockk<ChatCompletionMessage>()
+        val completion = mockk<ChatCompletion>()
+
+        every { mockClient.chat() } returns chatService
+        every { chatService.completions() } returns completionService
+        every { completionService.create(capture(capturedParams)) } returns completion
+        every { completion.choices() } returns listOf(choice)
+        every { choice.message() } returns message
+        every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
+
+        val context = PromptContext(
+            systemInstructions = "test",
+            methodInvocation = "{}",
+            memory = mapOf("obj" to "{\"nested\":\"data\"}", "plain" to "simple")
+        )
+
+        adapter.handleRequest(context, SimpleResult::class)
+
+        val params = capturedParams.captured
+        val paramsString = params.toString()
+        // The nested JSON should appear as structured JSON, not as an escaped string
+        assertTrue(paramsString.contains("nested"), "Memory should contain nested JSON key: $paramsString")
+        assertTrue(paramsString.contains("data"), "Memory should contain nested JSON value: $paramsString")
     }
 }

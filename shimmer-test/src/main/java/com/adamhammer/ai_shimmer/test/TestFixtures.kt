@@ -18,13 +18,6 @@ data class SimpleResult(
 )
 
 @Serializable
-@AiSchema(title = "CounterResult", description = "A result with a count")
-data class CounterResult(
-    @AiSchema(title = "Count", description = "The count value")
-    val count: Int = 0
-)
-
-@Serializable
 @AiSchema(title = "TestColor", description = "A test color enum")
 enum class TestColor { RED, GREEN, BLUE }
 

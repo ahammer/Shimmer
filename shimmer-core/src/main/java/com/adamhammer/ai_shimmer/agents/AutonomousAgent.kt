@@ -40,9 +40,18 @@ interface AutonomousAIApi {
     fun act(): Future<String>
 }
 
-class AutonomousAgent(private val api: AutonomousAIApi, private val decider: DecidingAgentAPI) {
+class AutonomousAgent(
+    private val apiInstance: ShimmerInstance<AutonomousAIApi>,
+    private val decider: DecidingAgentAPI
+) {
+    /** Secondary constructor for backward compatibility when memory forwarding is not needed. */
+    constructor(api: AutonomousAIApi, decider: DecidingAgentAPI) :
+        this(ShimmerInstance(api, java.util.concurrent.ConcurrentHashMap(), AutonomousAIApi::class), decider)
+
+    private val api: AutonomousAIApi get() = apiInstance.api
+
     fun step(): String {
-        val decision = decider.decide(ShimmerInstance(api, mutableMapOf(), AutonomousAIApi::class)).get()
+        val decision = decider.decide(ShimmerInstance(api, apiInstance._memory, AutonomousAIApi::class)).get()
 
         return when (decision.method) {
             "understand" -> {

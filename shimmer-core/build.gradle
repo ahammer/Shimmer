@@ -35,6 +35,11 @@ publishing {
             from components.java
             artifactId = 'shimmer-core'
 
+            versionMapping {
+                usage('java-api') { fromResolutionOf('runtimeClasspath') }
+                usage('java-runtime') { fromResolutionResult() }
+            }
+
             pom {
                 name = 'Shimmer Core'
                 description = 'AI-backed proxy library for Kotlin — core module with DSL builder, annotations, and resilience.'

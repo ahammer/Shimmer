@@ -2,6 +2,8 @@ package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import com.adamhammer.ai_shimmer.annotations.*
+import com.adamhammer.ai_shimmer.model.PromptContext
+import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import com.adamhammer.ai_shimmer.test.*
 import kotlinx.serialization.Serializable
 import org.junit.jupiter.api.Assertions.*
@@ -44,5 +46,23 @@ class StubAdapterTest {
         @AiOperation(summary = "GetColor", description = "Gets a color")
         @AiResponse(description = "The color", responseClass = TestColor::class)
         fun getColor(): Future<TestColor>
+    }
+
+    @Test
+    fun `StubAdapter throws ShimmerConfigurationException for class without no-arg constructor`() {
+        data class NoDefaultArgs(val required: String)
+
+        val stub = StubAdapter()
+        val context = PromptContext(
+            systemInstructions = "test",
+            methodInvocation = "{}",
+            memory = emptyMap()
+        )
+
+        val ex = assertThrows(ShimmerConfigurationException::class.java) {
+            stub.handleRequest(context, NoDefaultArgs::class)
+        }
+        assertTrue(ex.message!!.contains("no no-arg constructor"),
+            "Expected message about no-arg constructor, got: ${ex.message}")
     }
 }

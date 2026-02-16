@@ -37,6 +37,11 @@ publishing {
             from components.java
             artifactId = 'shimmer-openai'
 
+            versionMapping {
+                usage('java-api') { fromResolutionOf('runtimeClasspath') }
+                usage('java-runtime') { fromResolutionResult() }
+            }
+
             pom {
                 name = 'Shimmer OpenAI'
                 description = 'OpenAI adapter for the Shimmer AI proxy library.'

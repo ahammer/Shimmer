@@ -39,7 +39,13 @@ class OpenAiAdapter(
         val memorySection = if (context.memory.isNotEmpty()) {
             val memoryJson = json.encodeToString(
                 kotlinx.serialization.json.JsonObject(
-                    context.memory.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }
+                    context.memory.mapValues { entry ->
+                        try {
+                            json.parseToJsonElement(entry.value)
+                        } catch (_: Exception) {
+                            kotlinx.serialization.json.JsonPrimitive(entry.value)
+                        }
+                    }
                 )
             )
             "\n\n# MEMORY\n$memoryJson"
@@ -92,18 +98,22 @@ ${context.methodInvocation}$memorySection""".trimIndent()
     }
 
     internal fun extractJson(text: String): String {
-        val objectStartIndex = text.indexOf('{')
-        val objectEndIndex = text.lastIndexOf('}')
+        // Strip markdown code fences (```json ... ``` or ``` ... ```)
+        val fencePattern = Regex("```(?:json|JSON)?\\s*\\n?(.*?)\\n?\\s*```", RegexOption.DOT_MATCHES_ALL)
+        val stripped = fencePattern.find(text)?.groupValues?.get(1)?.trim() ?: text
+
+        val objectStartIndex = stripped.indexOf('{')
+        val objectEndIndex = stripped.lastIndexOf('}')
         if (objectStartIndex != -1 && objectEndIndex != -1 && objectStartIndex < objectEndIndex) {
-            return text.substring(objectStartIndex, objectEndIndex + 1)
+            return stripped.substring(objectStartIndex, objectEndIndex + 1)
         }
 
-        val arrayStartIndex = text.indexOf('[')
-        val arrayEndIndex = text.lastIndexOf(']')
+        val arrayStartIndex = stripped.indexOf('[')
+        val arrayEndIndex = stripped.lastIndexOf(']')
         if (arrayStartIndex != -1 && arrayEndIndex != -1 && arrayStartIndex < arrayEndIndex) {
-            return text.substring(arrayStartIndex, arrayEndIndex + 1)
+            return stripped.substring(arrayStartIndex, arrayEndIndex + 1)
         }
 
-        return text
+        return stripped
     }
 }

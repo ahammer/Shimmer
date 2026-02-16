@@ -8,6 +8,7 @@ import com.adamhammer.ai_shimmer.model.PromptContext
 import com.adamhammer.ai_shimmer.model.ResiliencePolicy
 import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import java.lang.reflect.Proxy
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
 class ShimmerInstance<T : Any>(
@@ -112,7 +113,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
             shimmer
         )
 
-        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), mutableMapOf(), apiInterface)
+        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), ConcurrentHashMap(), apiInterface)
         shimmer.instance = instance
         return instance
     }

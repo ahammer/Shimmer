@@ -2,6 +2,8 @@ package com.adamhammer.ai_shimmer.test
 
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.model.PromptContext
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
 /**
@@ -31,7 +33,8 @@ class MockAdapter private constructor(
     private val failOnCalls: Map<Int, Exception>
 ) : ApiAdapter {
 
-    private val _capturedContexts = mutableListOf<PromptContext>()
+    private val _capturedContexts: MutableList<PromptContext> = Collections.synchronizedList(mutableListOf())
+    private val _callCounter = AtomicInteger(0)
 
     /** All captured [PromptContext] objects received by this adapter, in call order. */
     val capturedContexts: List<PromptContext> get() = _capturedContexts.toList()
@@ -54,7 +57,7 @@ class MockAdapter private constructor(
 
     @Suppress("UNCHECKED_CAST")
     override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
-        val callIndex = _capturedContexts.size
+        val callIndex = _callCounter.getAndIncrement()
         _capturedContexts.add(context)
 
         failOnCalls[callIndex]?.let { throw it }

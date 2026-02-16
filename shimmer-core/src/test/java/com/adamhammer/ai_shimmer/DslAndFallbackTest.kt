@@ -1,7 +1,9 @@
 package com.adamhammer.ai_shimmer
 
 import com.adamhammer.ai_shimmer.model.PromptContext
+import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import com.adamhammer.ai_shimmer.test.*
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -76,5 +78,38 @@ class DslAndFallbackTest {
         val invocation = mock.lastContext!!.methodInvocation
         assertTrue(invocation.contains("resultSchema"), "Expected resultSchema in invocation: $invocation")
         assertTrue(invocation.contains("value"), "Expected 'value' field from SimpleResult in schema: $invocation")
+    }
+
+    // ── Suspend fallback test ───────────────────────────────────────────────
+
+    @Test
+    fun `suspend function triggers fallback adapter when primary fails`() = runBlocking {
+        val failingMock = MockAdapter.builder()
+            .responses(SimpleResult("unused"))
+            .failOnCall(0, RuntimeException("primary-failure"))
+            .build()
+
+        val fallbackMock = MockAdapter.scripted(SimpleResult("fallback-result"))
+
+        val api = shimmer<SuspendTestAPI> {
+            adapter(failingMock)
+            resilience {
+                maxRetries = 0
+                fallbackAdapter = fallbackMock
+            }
+        }.api
+
+        val result = api.get()
+        assertEquals("fallback-result", result.value)
+        fallbackMock.verifyCallCount(1)
+    }
+
+    // ── Negative DSL test ───────────────────────────────────────────────────
+
+    @Test
+    fun `shimmer DSL without adapter throws ShimmerConfigurationException`() {
+        assertThrows(ShimmerConfigurationException::class.java) {
+            shimmer<SimpleTestAPI> { }
+        }
     }
 }

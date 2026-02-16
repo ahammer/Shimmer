@@ -128,4 +128,39 @@ class AutonomousAgentTest {
         assertEquals("analyzed", agent.step())
         assertEquals("acted", agent.step())
     }
+
+    @Test
+    fun `memory from @Memorize calls is forwarded to decider`() {
+        val decisions = listOf(
+            AiDecision("understand", mapOf("data" to "hello")),
+            AiDecision("analyze", emptyMap())
+        )
+        val responses = listOf("understood-result", "analyzed-result")
+
+        val deciderMock = MockAdapter.scripted(*decisions.toTypedArray())
+        val deciderInstance = ShimmerBuilder(DecidingAgentAPI::class)
+            .setAdapterDirect(deciderMock)
+            .build()
+
+        val apiMock = MockAdapter.scripted(*responses.toTypedArray())
+        val apiInstance = ShimmerBuilder(AutonomousAIApi::class)
+            .setAdapterDirect(apiMock)
+            .build()
+
+        val agent = AutonomousAgent(apiInstance, deciderInstance.api)
+
+        // Step 1: understand → stores "Users Intent" in memory
+        agent.step()
+
+        // The api instance should now have the memorized value
+        assertTrue(apiInstance.memory.containsKey("Users Intent"),
+            "Memory should contain 'Users Intent' after understand call. Actual: ${apiInstance.memory}")
+
+        // Step 2: analyze → the decider should receive the accumulated memory
+        agent.step()
+
+        // Verify the api instance also has the second memorized value
+        assertTrue(apiInstance.memory.containsKey("analyze"),
+            "Memory should contain 'analyze' after analyze call. Actual: ${apiInstance.memory}")
+    }
 }
