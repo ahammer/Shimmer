@@ -1,0 +1,28 @@
+plugins {
+    id 'java-library'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.21'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
+}
+
+group = 'com.adamhammer.ai_shimmer'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        outputs.upToDateWhen { false }
+        showStandardStreams = true
+    }
+}
+
+dependencies {
+    api project(':shimmer-core')
+    implementation "com.openai:openai-java:0.22.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+}

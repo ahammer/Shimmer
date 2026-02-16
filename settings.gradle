@@ -4,4 +4,4 @@ pluginManagement {
     }
 }
 rootProject.name = 'AiApiShimmer'
-include 'AiApiShimmer'
+include 'shimmer-core', 'shimmer-openai', 'samples-dnd'
