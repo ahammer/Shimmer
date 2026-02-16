@@ -6,11 +6,7 @@ plugins {
 }
 
 test {
-    useJUnitPlatform {
-        if (!project.hasProperty('liveTests')) {
-            excludeTags 'live'
-        }
-    }
+    useJUnitPlatform()
     testLogging {
         outputs.upToDateWhen { false }
         showStandardStreams = true
@@ -19,11 +15,8 @@ test {
 
 dependencies {
     api project(':shimmer-core')
-    implementation "com.openai:openai-java:0.22.0"
     testImplementation project(':shimmer-test')
-    testImplementation project(':shimmer-agents')
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
-    testImplementation "io.mockk:mockk:1.13.10"
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
 }
 
@@ -36,7 +29,7 @@ publishing {
     publications {
         maven(MavenPublication) {
             from components.java
-            artifactId = 'shimmer-openai'
+            artifactId = 'shimmer-agents'
 
             versionMapping {
                 usage('java-api') { fromResolutionOf('runtimeClasspath') }
@@ -44,8 +37,8 @@ publishing {
             }
 
             pom {
-                name = 'Shimmer OpenAI'
-                description = 'OpenAI adapter for the Shimmer AI proxy library.'
+                name = 'Shimmer Agents'
+                description = 'AI-backed proxy library for Kotlin — agent abstractions (AutonomousAgent, DecidingAgent, AgentDispatcher).'
                 url = 'https://github.com/AdamHammer/Shimmer'
                 licenses {
                     license {

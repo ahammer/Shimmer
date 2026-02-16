@@ -107,7 +107,7 @@ class McpToolProvider(
         if (schema == null) return """{"type":"object","properties":{}}"""
 
         val obj = kotlinx.serialization.json.buildJsonObject {
-            put("type", schema.type() ?: "object")
+            put("type", kotlinx.serialization.json.JsonPrimitive(schema.type() ?: "object"))
             val properties = schema.properties()
             if (!properties.isNullOrEmpty()) {
                 put("properties", anyToJsonElement(properties))

@@ -27,15 +27,17 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 - **Interface-driven** — define AI interactions as Kotlin interfaces
 - **Kotlin DSL** — configure with `shimmer<T> { ... }` builder DSL
 - **Coroutine support** — `suspend` functions work natively alongside `Future<T>`
+- **Streaming** — return `Flow<String>` for token-by-token streaming responses
 - **Annotation metadata** — describe operations, parameters, and response schemas for the AI
 - **Adapter pattern** — swap AI providers without changing your interface (OpenAI included)
 - **Tool calling** — multi-turn LLM↔tool loops with pluggable `ToolProvider` abstraction
 - **MCP support** — consume MCP server tools and expose Shimmer interfaces as MCP servers
 - **Context control** — replace or intercept the prompt pipeline with `ContextBuilder` and `Interceptor`
+- **Conversation history** — inject prior messages via `PromptContext.conversationHistory` for multi-turn conversations
 - **Resilience** — retry with exponential backoff, per-call timeouts, result validation, and fallback adapters
 - **Memory system** — persist results across calls with `@Memorize` for stateful conversations
 - **Type-safe responses** — get deserialized Kotlin objects back, not raw strings
-- **Agent patterns** — build multi-step and decision-making AI workflows
+- **Agent patterns** — build multi-step and decision-making AI workflows with `shimmer-agents`
 - **Test-first** — `shimmer-test` module with `MockAdapter`, `MockToolProvider`, test helpers, and prompt assertions
 
 ## Project Structure
@@ -45,6 +47,7 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 | `shimmer-core` | Core library — annotations, proxy, context pipeline, tool-calling abstractions, resilience. Zero AI-provider dependencies. |
 | `shimmer-openai` | OpenAI adapter — sends `PromptContext` to OpenAI with native tool-calling support. |
 | `shimmer-mcp` | MCP integration — consume MCP server tools via `McpToolProvider`, expose Shimmer interfaces as MCP servers via `ShimmerMcpServer`. |
+| `shimmer-agents` | Agent abstractions — `AutonomousAgent`, `DecidingAgent`, `AgentDispatcher` for multi-step AI workflows. |
 | `shimmer-test` | Test utilities — `MockAdapter`, `MockToolProvider`, prompt assertions, test fixtures, `shimmerTest<T>()` / `shimmerStub<T>()` helpers. |
 | `samples-dnd` | Sample app — a text-based D&D adventure with the AI as Dungeon Master. |
 
@@ -64,6 +67,7 @@ Then add the modules as dependencies in your project:
 dependencies {
     implementation project(':shimmer-core')
     implementation project(':shimmer-openai')   // or your own adapter
+    implementation project(':shimmer-agents')   // optional: agent patterns
     testImplementation project(':shimmer-test')  // test utilities
 }
 ```
@@ -212,7 +216,7 @@ Read memory state via `instance.memory` (read-only map).
 
 ### Coroutines
 
-Shimmer supports both `Future<T>` and `suspend` functions:
+Shimmer supports `Future<T>`, `suspend` functions, and `Flow<String>` streaming:
 
 ```kotlin
 interface MyAPI {
@@ -221,10 +225,33 @@ interface MyAPI {
 
     // Coroutine-based
     suspend fun getDataAsync(): Result
+
+    // Streaming — token-by-token
+    @AiOperation(description = "Stream a response")
+    fun streamResponse(): Flow<String>
 }
 ```
 
 Suspend functions are automatically detected and executed on `Dispatchers.IO`.
+Streaming methods return a cold `Flow<String>` — the adapter's `handleRequestStreaming` is called when the flow is collected.
+
+### Conversation History
+
+Inject prior conversation messages into the prompt via `PromptContext.conversationHistory` using an interceptor:
+
+```kotlin
+val instance = shimmer<MyAPI> {
+    adapter(OpenAiAdapter())
+    interceptor { ctx ->
+        ctx.copy(conversationHistory = listOf(
+            Message(MessageRole.USER, "What is 2+2?"),
+            Message(MessageRole.ASSISTANT, "4"),
+        ))
+    }
+}
+```
+
+History messages are inserted between the system prompt and the current user message.
 
 ## Testing
 
@@ -334,8 +361,14 @@ class MyAdapter : ApiAdapter {
         // context.systemInstructions — the system preamble
         // context.methodInvocation   — JSON method + params + schema
         // context.memory             — accumulated memory map
+        // context.conversationHistory — prior messages for multi-turn
         // context.properties         — custom data from interceptors
         // context.availableTools     — tools from registered ToolProviders
+    }
+
+    // Override for token-by-token streaming
+    override fun handleRequestStreaming(context: PromptContext): Flow<String> {
+        // Return a Flow that emits tokens as they arrive
     }
 
     // Override for multi-turn tool calling

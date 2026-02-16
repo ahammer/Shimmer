@@ -45,6 +45,16 @@ subprojects {
             config.setFrom(rootProject.files('detekt.yml'))
         }
 
+        // Ensure real parameter names are preserved in bytecode
+        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            compilerOptions {
+                javaParameters = true
+            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.compilerArgs.add('-parameters')
+        }
+
         // Samples are demo code — warn but don't fail the build
         if (project.name.startsWith('samples-')) {
             detekt {
