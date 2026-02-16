@@ -1,24 +1,12 @@
-# ✨ AiApiShimmer ✨
+# AiApiShimmer
 
-<div align="center">
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Kotlin](https://img.shields.io/badge/kotlin-2.0+-purple&logo=kotlin)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)
-![Kotlin](https://img.shields.io/badge/kotlin-1.8+-purple?style=for-the-badge&logo=kotlin)
-
-**_Bridging the gap between your code and AI, one annotation at a time_** 🌉
-
-</div>
-
----
-
-## 🚀 What is AiApiShimmer?
-
-AiApiShimmer is a **magical bridge** between your Kotlin code and AI APIs. Just like how Retrofit transformed REST API interactions, AiApiShimmer revolutionizes how you communicate with AI services! 
-
-No more wrestling with complex API calls, token management, or response parsing. Simply define an interface, sprinkle some annotations, and *voilà* – you have a fully functional AI-powered API client! ✨
+A **Retrofit-style interface abstraction for AI APIs** in Kotlin. Define an interface with annotations, and AiApiShimmer generates a type-safe client backed by a dynamic proxy — just like Retrofit does for REST.
 
 ```kotlin
-// Define your interface
 interface QuestionAPI {
     @AiOperation(description = "Provide an in-depth answer to the question")
     fun askQuestion(
@@ -27,56 +15,38 @@ interface QuestionAPI {
     ): Future<String>
 }
 
-// Create an instance
 val api = ShimmerBuilder(QuestionAPI::class)
     .setAdapterClass(OpenAiAdapter::class)
     .build().api
 
-// Use it!
 val answer = api.askQuestion("What is the meaning of life?").get()
 ```
 
----
+## Features
 
-## 📚 Table of Contents
+- **Interface-driven** — define AI interactions as Kotlin interfaces
+- **Annotation metadata** — describe operations, parameters, and response schemas for the AI
+- **Adapter pattern** — swap AI providers without changing your interface (OpenAI included)
+- **Memory system** — persist results across calls with `@Memorize` for stateful conversations
+- **Type-safe responses** — get deserialized Kotlin objects back, not raw strings
+- **Agent patterns** — build multi-step and decision-making AI workflows
+- **Async by default** — all operations return `Future<T>`
 
-- [✨ Features](#-features)
-- [🏁 Quick Start Guide](#-quick-start-guide)
-- [🧠 Conceptual Overview](#-conceptual-overview)
-- [🎭 Use Cases](#-use-cases)
-- [🧩 Advanced Usage](#-advanced-usage)
-- [📋 API Reference](#-api-reference)
-- [🔮 Future Roadmap](#-future-roadmap)
+## Installation
 
----
+Clone and build from source:
 
-## ✨ Features
+```bash
+git clone https://github.com/adamhammer/Shimmer.git
+cd Shimmer
+./gradlew build
+```
 
-<div align="center">
+Then add the module as a dependency in your project.
 
-| 🌟 Feature | 📝 Description |
-|------------|----------------|
-| **Interface-Driven Design** | Define your AI interactions through simple interfaces |
-| **Annotation Magic** | Use annotations to provide rich context to the AI |
-| **Multiple Adapters** | Support for different AI providers (OpenAI, and more to come!) |
-| **Memory System** | Store and retrieve results from previous calls |
-| **Agent Patterns** | Build complex AI workflows with simple or decision-making agents |
-| **Type-Safe Responses** | Get strongly-typed responses from AI calls |
-| **Asynchronous API** | All operations return Futures for non-blocking execution |
+## Quick Start
 
-</div>
-
----
-
-## 🔧 Installation
-
-Get it from source, not released.
-
----
-
-## 🏁 Quick Start Guide
-
-### Step 1: Define your API interface 🖋️
+### 1. Define your API interface
 
 ```kotlin
 interface QuestionAPI {
@@ -89,27 +59,23 @@ interface QuestionAPI {
         responseClass = Answer::class
     )
     fun askStruct(
-        @AiParameter(description = "The question and its context for the API call")
+        @AiParameter(description = "The question and its context")
         question: Question?
     ): Future<Answer?>
 
     @AiOperation(
         summary = "AskString",
-        description = "Provide an in-depth answer to the question within its context, returning a string response."
-    )
-    @AiResponse(
-        description = "The answer as a string",
-        responseClass = String::class
+        description = "Answer the question, returning a plain string."
     )
     @Memorize("The last answer to the question.")
     fun askString(
-        @AiParameter(description = "The question and its context for the API call")
+        @AiParameter(description = "The question and its context")
         question: Question?
     ): Future<String?>
 }
 ```
 
-### Step 2: Define your data classes 📦
+### 2. Define your data classes
 
 ```kotlin
 @Serializable
@@ -117,329 +83,145 @@ interface QuestionAPI {
 class Question(
     @field:AiSchema(title = "Question", description = "The question to be asked")
     val question: String = "",
-    @field:AiSchema(title = "Context", description = "Who is asking the Question")
+    @field:AiSchema(title = "Context", description = "Who is asking the question")
     val context: String = ""
 )
 
 @Serializable
 @AiSchema(title = "The Answer", description = "Holds the answer to the question.")
 class Answer(
-    @field:AiSchema(title = "Answer", description = "A resoundingly deep answer to the question")
+    @field:AiSchema(title = "Answer", description = "A deep answer to the question")
     val answer: String = ""
 )
 ```
 
-### Step 3: Create an instance of your API 🔮
+### 3. Build and use
 
 ```kotlin
-// Set your OpenAI API key as an environment variable
-System.setProperty("OPENAI_API_KEY", "your-api-key")
-
-// Create the API instance
+// Requires OPENAI_API_KEY environment variable
 val api = ShimmerBuilder(QuestionAPI::class)
     .setAdapterClass(OpenAiAdapter::class)
     .build().api
 
-// Use the API
 val question = Question("What is the meaning of life?", "A curious student")
 val answer = api.askStruct(question).get()
 println(answer?.answer)
 ```
 
-### Step 4: Enjoy the magic! ✨
-
-That's it! You now have a fully functional AI-powered API client. No more dealing with complex API calls, token management, or response parsing. Just define your interface, add some annotations, and you're good to go!
-
----
-
-## 🧠 Conceptual Overview
-
-### The AiApiShimmer Philosophy 💭
-
-AiApiShimmer is built on a simple yet powerful idea: **_What if interacting with AI was as easy as defining an interface?_**
-
-Traditional AI API interactions involve:
-1. Constructing complex request objects
-2. Managing API keys and tokens
-3. Handling HTTP requests and responses
-4. Parsing JSON responses
-5. Error handling and retries
-
-AiApiShimmer abstracts all of this away, letting you focus on what matters: **_what you want the AI to do_**.
-
-### How It Works 🔍
-
-<div align="center">
+## How It Works
 
 ```mermaid
 graph TD
     A[Your Interface] -->|Annotations| B[Shimmer Proxy]
     B -->|Reflection| C[API Adapter]
-    C -->|HTTP Request| D[AI Provider API]
+    C -->|HTTP Request| D[AI Provider]
     D -->|Response| C
     C -->|Deserialization| B
     B -->|Type-Safe Result| A
 ```
 
-</div>
+1. You define an interface with methods representing AI operations
+2. Annotations provide metadata about operations, parameters, and expected response schemas
+3. `ShimmerBuilder` creates a JDK dynamic proxy implementing your interface
+4. The proxy delegates calls to an `ApiAdapter` for your chosen AI provider
+5. Responses are deserialized into your specified types via `kotlinx.serialization`
 
-1. **Interface Definition**: You define an interface with methods representing AI operations
-2. **Annotation Magic**: Annotations provide metadata about operations, parameters, and expected responses
-3. **Dynamic Proxy**: AiApiShimmer creates a dynamic proxy implementing your interface
-4. **Adapter Pattern**: The proxy delegates calls to an adapter for your chosen AI provider
-5. **Type Safety**: Responses are deserialized into your specified types
+### Memory
 
-### The Memory System 🧠
-
-AiApiShimmer includes a built-in memory system that allows methods to store and retrieve results:
+Methods annotated with `@Memorize` store their results in a shared memory map, which is passed to subsequent requests. This enables multi-step workflows where context accumulates:
 
 ```kotlin
 @Memorize("user-input")
 fun storeInput(input: String): Future<String>
 
-// The memory is passed to each request
-fun retrieveWithContext(): Future<String> // Has access to the stored memory
+// Subsequent calls receive the stored memory automatically
+fun retrieveWithContext(): Future<String>
 ```
 
-This enables building stateful AI interactions where previous context matters!
+## Advanced Usage
 
----
+### Enums
 
-## 🎭 Use Cases
-
-### 💬 Conversational Agents
-
-Create chatbots and conversational agents with ease:
-
-```kotlin
-interface ChatbotAPI {
-    @Memorize("conversation-history")
-    fun chat(userMessage: String): Future<String>
-}
-
-val chatbot = ShimmerBuilder(ChatbotAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build().api
-
-// Each call has access to previous conversation history
-println(chatbot.chat("Hello!").get())
-println(chatbot.chat("What's the weather like?").get())
-println(chatbot.chat("Can you remind me what we talked about?").get())
-```
-
-### 📝 Content Generation
-
-Generate blog posts, product descriptions, or creative content:
-
-```kotlin
-interface ContentAPI {
-    fun generateBlogPost(topic: String, keywords: List<String>): Future<BlogPost>
-    fun generateProductDescription(product: Product): Future<String>
-    fun createStory(prompt: String, genre: String): Future<Story>
-}
-```
-
-### 🔍 Data Analysis
-
-Analyze data and extract insights:
-
-```kotlin
-interface AnalysisAPI {
-    fun summarizeText(text: String): Future<Summary>
-    fun extractEntities(document: String): Future<List<Entity>>
-    fun sentimentAnalysis(review: String): Future<Sentiment>
-}
-```
-
-### 🤖 Autonomous Agents
-
-Build complex autonomous agents that can make decisions:
-
-```kotlin
-val agentAdapter = ShimmerBuilder(AutonomousAIApi::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build()
-
-val deciderAdapter = ShimmerBuilder(DecidingAgentAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build()
-
-val agent = AutonomousAgent(agentAdapter.api, deciderAdapter.api)
-
-// The agent decides what to do next and executes it
-val result = agent.step()
-```
-
-### 🎮 Game Development
-
-Create NPCs with realistic dialogue and behavior:
-
-```kotlin
-interface GameNpcAPI {
-    fun generateDialogue(character: Character, situation: String): Future<String>
-    fun decideAction(character: Character, gameState: GameState): Future<Action>
-}
-```
-
----
-
-## 🧩 Advanced Usage
-
-### Working with Enums 🎲
-
-AiApiShimmer handles enums gracefully:
+AiApiShimmer handles enum types in request/response schemas:
 
 ```kotlin
 @Serializable
-enum class CardRank {
-    UNDEFINED, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN, JACK, QUEEN, KING, ACE
-}
+enum class CardSuit { UNDEFINED, HEARTS, DIAMONDS, CLUBS, SPADES }
 
 @Serializable
-enum class CardSuit {
-    UNDEFINED, HEARTS, DIAMONDS, CLUBS, SPADES
-}
-
-@Serializable
-data class HigherCardResponse(
+data class CardResponse(
     val rank: CardRank = CardRank.UNDEFINED,
     val suit: CardSuit = CardSuit.UNDEFINED
 )
 
-interface HigherCardAPI {
-    fun drawHigherCard(value: Int, suit: CardSuit): Future<HigherCardResponse>
+interface CardAPI {
+    fun drawHigherCard(value: Int, suit: CardSuit): Future<CardResponse>
 }
 ```
 
-### Building Agents 🤖
+### Multi-Step Agents
 
-AiApiShimmer supports two types of agents:
-
-#### Simple Agent with Fixed Steps
+Chain LLM calls in a fixed sequence using the memory system:
 
 ```kotlin
 class SimpleAgent(private val api: SimpleAIApi) {
     fun ideate(input: String): IdeationResult {
-        // Step 1: Generate initial ideas from the provided input
-        api.initiate(input).get()
-
-        // Step 2: Expand on the generated ideas
-        api.expand().get()
-
-        // Step 3: Generate the final markdown report
-        val reportContent = api.report().get()
-        val finalIdea = Idea(content = reportContent)
-        return IdeationResult(idea = finalIdea)
+        api.initiate(input).get()     // stored via @Memorize
+        api.expand().get()            // reads previous memory, stores expanded result
+        val report = api.report().get()
+        return IdeationResult(idea = Idea(content = report))
     }
 }
 ```
 
-#### Decision-Making Agent
+### Decision-Making Agents
+
+Use `DecidingAgentAPI` to let the AI choose which method to call next:
 
 ```kotlin
-class AutonomousAgent(private val api: AutonomousAIApi, private val decider: DecidingAgentAPI) {
-    fun step(): String {
-        // Get the next action to take
-        val decision = decider.decide(ShimmerInstance(api, mutableMapOf(), AutonomousAIApi::class)).get()
-        
-        // Execute the action based on the decision
-        val result = when (decision.method) {
-            "understand" -> {
-                val data = decision.args["data"] ?: throw IllegalArgumentException("Missing 'data' argument")
-                api.understand(data).get()
-            }
-            "analyze" -> api.analyze().get()
-            "plan" -> api.plan().get()
-            "reflect" -> api.reflect().get()
-            "act" -> api.act().get()
-            else -> throw IllegalArgumentException("Unknown method: ${decision.method}")
-        }
-        
-        return result
-    }
-}
+val agent = AutonomousAgent(agentApi, deciderApi)
+val result = agent.step() // AI decides and executes the next action
 ```
 
-### Creating Custom Adapters 🔌
+### Custom Adapters
 
-You can create your own adapters for different AI providers:
+Implement `ApiAdapter` to add support for other AI providers:
 
 ```kotlin
-class MyCustomAdapter : ApiAdapter {
+class MyAdapter : ApiAdapter {
     override fun <R : Any> handleRequest(
         method: Method,
         args: Array<out Any>?,
         resultClass: KClass<R>,
         memory: Map<String, String>
     ): R {
-        // Implement your custom adapter logic here
+        // Your implementation
     }
 }
-
-// Use your custom adapter
-val api = ShimmerBuilder(MyAPI::class)
-    .setAdapterClass(MyCustomAdapter::class)
-    .build().api
 ```
 
----
+## API Reference
 
-## 📋 API Reference
+### Annotations
 
-### Core Annotations 🏷️
+| Annotation | Target | Purpose |
+|------------|--------|---------|
+| `@AiOperation` | Methods | Describes the AI operation (summary, description) |
+| `@AiParameter` | Parameters | Describes a method parameter |
+| `@AiResponse` | Methods | Specifies the expected response type and description |
+| `@AiSchema` | Classes, Fields | Provides metadata for data structure schemas |
+| `@Memorize` | Methods | Stores the method result in shared memory |
+| `@Subscribe` | Methods, Fields, Parameters | Marks a subscription channel (pub/sub) |
+| `@Publish` | Methods, Fields, Parameters | Marks a publication channel (pub/sub) |
 
-| Annotation | Purpose | Target |
-|------------|---------|--------|
-| `@AiOperation` | Describes an API operation | Methods |
-| `@AiParameter` | Describes a parameter | Parameters |
-| `@AiResponse` | Describes the expected response | Methods |
-| `@AiSchema` | Provides metadata for data structures | Classes, Fields |
-| `@Memorize` | Indicates results that should be cached | Methods |
-| `@Subscribe` | For pub/sub patterns | Methods, Fields, Parameters |
-| `@Publish` | For pub/sub patterns | Methods, Fields, Parameters |
+### Built-in Adapters
 
-### ShimmerBuilder 🏗️
+| Adapter | Purpose |
+|---------|---------|
+| `OpenAiAdapter` | Sends requests to OpenAI (configurable model, defaults to GPT-4o-mini) |
+| `StubAdapter` | Returns default-constructed instances for testing |
 
-The main entry point for creating API instances:
+## License
 
-```kotlin
-val api = ShimmerBuilder(MyAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build().api
-```
-
-### Adapters 🔌
-
-Available adapters:
-
-- `OpenAiAdapter`: Sends requests to OpenAI's API
-- `StubAdapter`: Simple implementation for testing
-
----
-
-## 🔮 Future Roadmap
-
-We're just getting started! Here's what's coming next:
-
-- 🌐 **More Adapters**: Support for Anthropic, Google, and other AI providers
-- 🔄 **Streaming Responses**: Support for streaming responses from AI providers
-- 🔒 **Enhanced Security**: More options for API key management and security
-- 📊 **Metrics and Monitoring**: Built-in support for tracking API usage and performance
-- 🧪 **Testing Utilities**: More tools for testing AI-powered applications
-- 📱 **Mobile Support**: Optimizations for Android and iOS
-
----
-
-<div align="center">
-
-## 💖 Join the AiApiShimmer Community!
-
-[![GitHub Stars](https://img.shields.io/github/stars/adamhammer/ai-api-shimmer?style=social)](https://github.com/adamhammer/ai-api-shimmer)
-[![Twitter Follow](https://img.shields.io/twitter/follow/adamhammer?style=social)](https://twitter.com/adamhammer)
-
-**Made with ❤️ by [Adam Hammer](https://github.com/adamhammer)**
-
-</div>
-
----
+MIT — see [LICENSE](LICENSE) for details.
 

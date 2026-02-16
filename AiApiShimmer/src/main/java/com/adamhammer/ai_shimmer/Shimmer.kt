@@ -1,8 +1,7 @@
 package com.adamhammer.ai_shimmer
-import com.adamhammer.ai_shimmer.ShimmerInstance
+
 import com.adamhammer.ai_shimmer.annotations.Memorize
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
-
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
@@ -10,12 +9,11 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 import kotlin.reflect.KClass
 
-// The invocation handler.
 class Shimmer<T : Any>(
     private val adapter: ApiAdapter,
 ) : InvocationHandler {
 
-    lateinit var instance: ShimmerInstance<T>
+    internal lateinit var instance: ShimmerInstance<T>
 
     override fun invoke(proxy: Any?, method: Method, args: Array<out Any>?): Any? {
         // Only support methods returning a Future.

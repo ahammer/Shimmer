@@ -1,8 +1,7 @@
 package com.adamhammer.ai_shimmer.adapters
 
-import com.adamhammer.ai_shimmer.adapters.BaseApiAdapter
+import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.utils.toJsonInvocationString
-import com.adamhammer.ai_shimmer.utils.toJsonStructureString
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
@@ -14,19 +13,21 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import java.lang.reflect.Method
+import java.util.logging.Logger
 
 
-public class OpenAiAdapter : BaseApiAdapter() {
-    // Read API key from the environment variable.
+class OpenAiAdapter(
+    private val model: ChatModel = ChatModel.GPT_4O_MINI
+) : ApiAdapter {
+    private val logger = Logger.getLogger(OpenAiAdapter::class.java.name)
+
     private val apiKey: String = System.getenv("OPENAI_API_KEY")
         ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")
 
-    // Build the client using the official OpenAI Java API.
     private val client: OpenAIClient = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .build()
 
-    // Configure JSON parser.
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
@@ -67,32 +68,19 @@ $systemPreamble
 # METHOD
 $methodDeclaration""".trimIndent()
 
-        // Create a ChatCompletion request using the official API.
         val params = ChatCompletionCreateParams.builder()
             .addUserMessage(prompt)
-            .model(ChatModel.GPT_4O_MINI)
+            .model(model)
             .build()
 
-        println("╔══════════════════╗")
-        println("║   OPENAI TX      ║")
-        println("╚══════════════════╝")
-        println()
-        // Format the prompt for better readability in logs
-        val formattedPrompt = prompt.replace("\n# METHOD\n", "\n# METHOD\n")
-                                   .replace("\n# RESULT\n", "\n# RESULT\n")
-        println(formattedPrompt)
-        println()
+        logger.fine { "Request:\n$prompt" }
+
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)
 
         val completionText = chatCompletion.choices().firstOrNull()?.message()?.content()?.get()?.trim()
             ?: throw RuntimeException("No response from OpenAI API")
 
-        println("╔══════════════════╗")
-        println("║   OPENAI RX      ║")
-        println("╚══════════════════╝")
-        println()
-        println(completionText)
-        println()
+        logger.fine { "Response:\n$completionText" }
 
         // If the expected result type is String, return the raw response directly,
         // but clean it up if it's just the literal "Text" or starts with "# RESULT"

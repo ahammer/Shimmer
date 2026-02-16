@@ -67,8 +67,10 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
             val propType = prop.returnType.classifier as? KClass<*>
 
             val propSchema = when {
-                propType?.java?.isEnum == true ->
-                    JsonArray(propType.java.enumConstants.map { JsonPrimitive(it.toString()) })
+                propType?.java?.isEnum == true -> {
+                    val values = propType.java.enumConstants.joinToString("/") { it.toString() }
+                    JsonPrimitive("Enum ${prop.name} ($values)")
+                }
                 propType == Map::class ->
                     buildJsonObject { put("key", JsonPrimitive("value")) }
                 propType in setOf(List::class, Set::class) ->

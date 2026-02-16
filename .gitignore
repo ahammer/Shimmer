@@ -2,23 +2,16 @@
 **/build/
 !src/**/build/
 
-# Ignore Gradle GUI config
+# IDE
+.idea/
+*.iml
+local.properties
+
+# Gradle
 gradle-app.setting
-
-# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
-!gradle-wrapper.jar
-
-# Avoid ignore Gradle wrappper properties
-!gradle-wrapper.properties
-
-# Cache of project
 .gradletasknamecache
-
-# Eclipse Gradle plugin generated files
-# Eclipse Core
-.project
-# JDT-specific (Eclipse Java Development Tools)
-.classpath
+!gradle-wrapper.jar
+!gradle-wrapper.properties
 
 # Compiled class file
 *.class
@@ -26,13 +19,7 @@ gradle-app.setting
 # Log file
 *.log
 
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
+# Package Files
 *.jar
 *.war
 *.nar
@@ -41,6 +28,6 @@ gradle-app.setting
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# JVM crash logs
 hs_err_pid*
 replay_pid*
