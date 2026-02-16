@@ -1,5 +1,7 @@
 package com.adamhammer.ai_shimmer
 
+import com.adamhammer.ai_shimmer.model.ResiliencePolicy
+import com.adamhammer.ai_shimmer.model.ShimmerException
 import com.adamhammer.ai_shimmer.test.*
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
@@ -51,5 +53,67 @@ class SuspendTest {
 
         val result = instance.api.get()
         assertEquals("dsl", result.value)
+    }
+
+    @Test
+    fun `suspend memorize stores result in memory`() = runBlocking {
+        val mock = MockAdapter.scripted("stored-value", "recalled-value")
+        val instance = ShimmerBuilder(SuspendMemoryTestAPI::class)
+            .setAdapterDirect(mock)
+            .build()
+
+        instance.api.store("input")
+        assertTrue(instance.memory.containsKey("suspend-stored"),
+            "Memory should contain 'suspend-stored'. Actual: ${instance.memory}")
+    }
+
+    @Test
+    fun `suspend memorize passes memory to subsequent calls`() = runBlocking {
+        val mock = MockAdapter.scripted("first", "second")
+        val instance = ShimmerBuilder(SuspendMemoryTestAPI::class)
+            .setAdapterDirect(mock)
+            .build()
+
+        instance.api.store("x")
+        instance.api.recall()
+
+        mock.contextAt(1).assertMemoryContains("suspend-stored", "\"first\"")
+    }
+
+    @Test
+    fun `suspend function propagates adapter exception`() {
+        val mock = MockAdapter.builder()
+            .responses(SimpleResult("unused"))
+            .failOnCall(0, RuntimeException("adapter-error"))
+            .build()
+
+        val api = ShimmerBuilder(SuspendTestAPI::class)
+            .setAdapterDirect(mock)
+            .build().api
+
+        val ex = assertThrows(ShimmerException::class.java) {
+            runBlocking { api.get() }
+        }
+        assertTrue(ex.message!!.contains("failed"), "Expected failure message, got: ${ex.message}")
+    }
+
+    @Test
+    fun `suspend function works with resilience retry`() = runBlocking {
+        val mock = MockAdapter.builder()
+            .responses(SimpleResult("ok"))
+            .failOnCall(0, RuntimeException("transient"))
+            .build()
+
+        val api = ShimmerBuilder(SuspendTestAPI::class)
+            .setAdapterDirect(mock)
+            .resilience {
+                maxRetries = 1
+                retryDelayMs = 10
+            }
+            .build().api
+
+        val result = api.get()
+        assertEquals("ok", result.value)
+        mock.verifyCallCount(2)
     }
 }

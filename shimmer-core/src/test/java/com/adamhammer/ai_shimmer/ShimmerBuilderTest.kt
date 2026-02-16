@@ -4,6 +4,7 @@ import com.adamhammer.ai_shimmer.adapters.StubAdapter
 import com.adamhammer.ai_shimmer.context.DefaultContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.model.PromptContext
+import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import com.adamhammer.ai_shimmer.model.ShimmerRequest
 import com.adamhammer.ai_shimmer.test.*
 import org.junit.jupiter.api.Assertions.*
@@ -12,8 +13,8 @@ import org.junit.jupiter.api.Test
 class ShimmerBuilderTest {
 
     @Test
-    fun `build without adapter throws IllegalStateException`() {
-        assertThrows(IllegalStateException::class.java) {
+    fun `build without adapter throws ShimmerConfigurationException`() {
+        assertThrows(ShimmerConfigurationException::class.java) {
             ShimmerBuilder(SimpleTestAPI::class).build()
         }
     }

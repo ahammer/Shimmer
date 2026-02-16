@@ -6,6 +6,7 @@ import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
 import com.adamhammer.ai_shimmer.model.PromptContext
 import com.adamhammer.ai_shimmer.model.ResiliencePolicy
+import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
 
@@ -101,7 +102,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
 
     fun build(): ShimmerInstance<T> {
         val resolvedAdapter = adapter
-            ?: throw IllegalStateException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
+            ?: throw ShimmerConfigurationException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
 
         val shimmer = Shimmer<T>(resolvedAdapter, contextBuilder, interceptors.toList(), resiliencePolicy)
 

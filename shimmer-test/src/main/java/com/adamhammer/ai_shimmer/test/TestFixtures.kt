@@ -88,6 +88,34 @@ interface SuspendTestAPI {
     ): SimpleResult
 }
 
+interface SuspendMemoryTestAPI {
+    @AiOperation(summary = "Store", description = "Stores a value via suspend")
+    @AiResponse(description = "Stored result", responseClass = String::class)
+    @Memorize(label = "suspend-stored")
+    suspend fun store(
+        @AiParameter(description = "The value to store") value: String
+    ): String
+
+    @AiOperation(summary = "Recall", description = "Recalls the stored value via suspend")
+    @AiResponse(description = "The recalled value", responseClass = String::class)
+    @Memorize(label = "suspend-recalled")
+    suspend fun recall(): String
+}
+
+/**
+ * API interface that relies on @AiResponse fallback — no explicit responseClass.
+ * The framework should extract the type from Future<SimpleResult>.
+ */
+interface FallbackResponseAPI {
+    @AiOperation(summary = "Get", description = "Gets a result using fallback type extraction")
+    @AiResponse(description = "The result")
+    fun get(): Future<SimpleResult>
+
+    @AiOperation(summary = "GetString", description = "Gets a string using fallback type extraction")
+    @AiResponse(description = "The result")
+    fun getString(): Future<String>
+}
+
 // ── Test helper functions ───────────────────────────────────────────────────────
 
 /**

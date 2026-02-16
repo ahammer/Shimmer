@@ -1,8 +1,7 @@
 package com.adamhammer.ai_shimmer.samples.dnd
 
-import com.adamhammer.ai_shimmer.ShimmerBuilder
 import com.adamhammer.ai_shimmer.adapters.OpenAiAdapter
-import com.adamhammer.ai_shimmer.model.ResiliencePolicy
+import com.adamhammer.ai_shimmer.shimmer
 import com.adamhammer.ai_shimmer.samples.dnd.model.*
 import java.util.Scanner
 
@@ -51,23 +50,21 @@ fun main() {
     println()
 
     // --- Build the Shimmer-powered DM ---
-    val dm = ShimmerBuilder(DungeonMasterAPI::class)
-        .setAdapterClass(OpenAiAdapter::class)
-        .addInterceptor(WorldStateInterceptor { world })
-        .setResiliencePolicy(
-            ResiliencePolicy(
-                maxRetries = 2,
-                retryDelayMs = 500,
-                resultValidator = { result ->
-                    when (result) {
-                        is ActionResult -> result.narrative.isNotBlank() && result.hpChange in -15..15
-                        is SceneDescription -> result.narrative.isNotBlank()
-                        else -> true
-                    }
+    val dm = shimmer<DungeonMasterAPI> {
+        setAdapterClass(OpenAiAdapter::class)
+        addInterceptor(WorldStateInterceptor { world })
+        resilience {
+            maxRetries = 2
+            retryDelayMs = 500
+            resultValidator = { result ->
+                when (result) {
+                    is ActionResult -> result.narrative.isNotBlank() && result.hpChange in -15..15
+                    is SceneDescription -> result.narrative.isNotBlank()
+                    else -> true
                 }
-            )
-        )
-        .build().api
+            }
+        }
+    }.api
 
     // --- Opening scene ---
     val scene = dm.describeScene().get()

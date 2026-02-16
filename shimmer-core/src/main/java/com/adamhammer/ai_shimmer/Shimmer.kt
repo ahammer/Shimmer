@@ -6,7 +6,6 @@ import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
 import com.adamhammer.ai_shimmer.model.*
 import com.adamhammer.ai_shimmer.utils.toJsonString
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,7 +91,6 @@ class Shimmer<T : Any>(
     }
 
     @Suppress("UNCHECKED_CAST")
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun invokeSuspend(method: Method, args: Array<out Any>): Any? {
         val continuation = args.last() as Continuation<Any?>
         val realArgs = if (args.size > 1) args.sliceArray(0 until args.size - 1) else null
@@ -105,8 +103,6 @@ class Shimmer<T : Any>(
         } else {
             String::class
         }
-
-        val deferred = CompletableDeferred<Any?>()
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -123,17 +119,9 @@ class Shimmer<T : Any>(
                     instance._memory[memorizeKey] = result.toJsonString()
                 }
 
-                deferred.complete(result)
+                continuation.resumeWith(Result.success(result))
             } catch (e: Exception) {
-                deferred.completeExceptionally(e)
-            }
-        }
-
-        deferred.invokeOnCompletion { error ->
-            if (error != null) {
-                continuation.resumeWith(Result.failure(error))
-            } else {
-                continuation.resumeWith(Result.success(deferred.getCompleted()))
+                continuation.resumeWith(Result.failure(e))
             }
         }
 

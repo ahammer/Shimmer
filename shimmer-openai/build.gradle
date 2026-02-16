@@ -26,11 +26,45 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
 }
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
 publishing {
     publications {
         maven(MavenPublication) {
             from components.java
             artifactId = 'shimmer-openai'
+
+            pom {
+                name = 'Shimmer OpenAI'
+                description = 'OpenAI adapter for the Shimmer AI proxy library.'
+                url = 'https://github.com/AdamHammer/Shimmer'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'adamhammer'
+                        name = 'Adam Hammer'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/AdamHammer/Shimmer.git'
+                    developerConnection = 'scm:git:ssh://github.com/AdamHammer/Shimmer.git'
+                    url = 'https://github.com/AdamHammer/Shimmer'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'local'
+            url = layout.buildDirectory.dir('repo')
         }
     }
 }
