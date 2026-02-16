@@ -19,14 +19,13 @@ import com.openai.models.ChatCompletionToolMessageParam
 import com.openai.models.ChatCompletionAssistantMessageParam
 import com.openai.models.ChatCompletionSystemMessageParam
 import com.openai.models.ChatCompletionUserMessageParam
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
+import kotlin.reflect.full.createType
 import java.util.logging.Logger
 
 class OpenAiAdapter(
@@ -37,8 +36,9 @@ class OpenAiAdapter(
     private val logger = Logger.getLogger(OpenAiAdapter::class.java.name)
 
     private val client: OpenAIClient = client ?: run {
-        val apiKey = System.getenv("OPENAI_API_KEY")
-            ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")
+        val apiKey = checkNotNull(System.getenv("OPENAI_API_KEY")) {
+            "OPENAI_API_KEY environment variable not set."
+        }
         OpenAIOkHttpClient.builder()
             .apiKey(apiKey)
             .build()
@@ -49,12 +49,10 @@ class OpenAiAdapter(
         prettyPrint = true
     }
 
-    @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
         return handleRequestInternal(context, resultClass, emptyList())
     }
 
-    @OptIn(InternalSerializationApi::class)
     override fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>,
@@ -63,7 +61,6 @@ class OpenAiAdapter(
         return handleRequestInternal(context, resultClass, toolProviders)
     }
 
-    @OptIn(InternalSerializationApi::class)
     private fun <R : Any> handleRequestInternal(
         context: PromptContext,
         resultClass: KClass<R>,
@@ -216,7 +213,6 @@ ${context.methodInvocation}$memorySection""".trimIndent()
             .build()
     }
 
-    @OptIn(InternalSerializationApi::class)
     private fun <R : Any> deserializeResponse(completionText: String, resultClass: KClass<R>): R {
         logger.fine { "Response:\n$completionText" }
 
@@ -237,7 +233,7 @@ ${context.methodInvocation}$memorySection""".trimIndent()
 
         try {
             @Suppress("UNCHECKED_CAST")
-            val serializer = resultClass.serializer() as KSerializer<R>
+            val serializer = serializer(resultClass.createType()) as kotlinx.serialization.KSerializer<R>
             return json.decodeFromString(serializer, jsonResponse)
         } catch (e: Exception) {
             throw ShimmerDeserializationException(

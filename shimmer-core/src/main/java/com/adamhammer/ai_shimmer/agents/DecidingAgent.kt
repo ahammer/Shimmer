@@ -27,7 +27,8 @@ fun <T : Any> DecidingAgentAPI.decide(shimmerInstance: ShimmerInstance<T>): Futu
 interface DecidingAgentAPI {
     @AiOperation(
         summary = "Decide Next Action",
-        description = "Introspects the provided object to build a decision schema and then determines the next action based on its capabilities."
+        description = "Introspects the provided object to build a decision schema" +
+            " and then determines the next action based on its capabilities."
     )
     @AiResponse(
         description = "A decision about the next action, based on the options and available input.",

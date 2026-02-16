@@ -4,21 +4,25 @@ import com.adamhammer.ai_shimmer.annotations.Memorize
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
+import com.adamhammer.ai_shimmer.interfaces.RequestListener
 import com.adamhammer.ai_shimmer.interfaces.ToolProvider
 import com.adamhammer.ai_shimmer.model.*
 import com.adamhammer.ai_shimmer.utils.toJsonString
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.logging.Logger
 import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn
 import kotlin.math.pow
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.kotlinFunction
@@ -28,17 +32,25 @@ class Shimmer<T : Any>(
     private val contextBuilder: ContextBuilder,
     private val interceptors: List<Interceptor>,
     private val resilience: ResiliencePolicy,
-    private val toolProviders: List<ToolProvider> = emptyList()
+    private val toolProviders: List<ToolProvider> = emptyList(),
+    private val memory: MutableMap<String, String>,
+    private val klass: KClass<T>,
+    private val listeners: List<RequestListener> = emptyList()
 ) : InvocationHandler {
 
     private val logger = Logger.getLogger(Shimmer::class.java.name)
-    internal lateinit var instance: ShimmerInstance<T>
+
+    private val concurrencySemaphore: Semaphore? =
+        if (resilience.maxConcurrentRequests > 0) Semaphore(resilience.maxConcurrentRequests) else null
+
+    private val rateLimiter: TokenBucketRateLimiter? =
+        if (resilience.maxRequestsPerMinute > 0) TokenBucketRateLimiter(resilience.maxRequestsPerMinute) else null
 
     override fun invoke(proxy: Any?, method: Method, args: Array<out Any>?): Any? {
         // Handle standard Object methods so debuggers, logging, etc. don't throw
         if (method.declaringClass == Object::class.java) {
             return when (method.name) {
-                "toString" -> "ShimmerProxy[${instance.klass.simpleName}]"
+                "toString" -> "ShimmerProxy[${klass.simpleName}]"
                 "hashCode" -> System.identityHashCode(proxy)
                 "equals" -> proxy === args?.firstOrNull()
                 else -> method.invoke(this, *(args ?: emptyArray()))
@@ -69,7 +81,7 @@ class Shimmer<T : Any>(
                     ?: throw UnsupportedOperationException("Expected a class type as the generic parameter")
                 val kClass = clazz.kotlin
 
-                val request = ShimmerRequest(method, args, instance._memory.toMap(), kClass)
+                val request = ShimmerRequest(method, args, memory.toMap(), kClass)
                 var context = contextBuilder.build(request)
 
                 // Inject available tools from registered tool providers
@@ -82,12 +94,14 @@ class Shimmer<T : Any>(
                     context = interceptor.intercept(context)
                 }
 
+                val startMs = System.currentTimeMillis()
                 val result = executeWithResilience(context, kClass)
 
                 if (memorizeKey != null) {
-                    instance._memory[memorizeKey] = result.toJsonString()
+                    memory[memorizeKey] = result.toJsonString()
                 }
 
+                notifyComplete(context, result, startMs)
                 if (result is Future<*>) result.get() else result
             } else {
                 throw IllegalStateException(
@@ -112,71 +126,80 @@ class Shimmer<T : Any>(
             String::class
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val request = ShimmerRequest(method, realArgs, instance._memory.toMap(), resultClass)
-                var context = contextBuilder.build(request)
+        // Use startCoroutineUninterceptedOrReturn to preserve the caller's
+        // coroutine context (Job, dispatcher), enabling structured concurrency
+        // and proper cancellation propagation.
+        val block: suspend () -> Any? = {
+            val request = ShimmerRequest(method, realArgs, memory.toMap(), resultClass)
+            var context = contextBuilder.build(request)
 
-                // Inject available tools from registered tool providers
-                if (toolProviders.isNotEmpty()) {
-                    val allTools = toolProviders.flatMap { it.listTools() }
-                    context = context.copy(availableTools = allTools)
-                }
-
-                for (interceptor in interceptors) {
-                    context = interceptor.intercept(context)
-                }
-
-                val result = executeWithResilience(context, resultClass)
-
-                if (memorizeKey != null) {
-                    instance._memory[memorizeKey] = result.toJsonString()
-                }
-
-                continuation.resumeWith(Result.success(result))
-            } catch (e: Exception) {
-                continuation.resumeWith(Result.failure(e))
+            if (toolProviders.isNotEmpty()) {
+                val allTools = toolProviders.flatMap { it.listTools() }
+                context = context.copy(availableTools = allTools)
             }
+
+            for (interceptor in interceptors) {
+                context = interceptor.intercept(context)
+            }
+
+            val startMs = System.currentTimeMillis()
+            val result = executeSuspendWithResilience(context, resultClass)
+
+            if (memorizeKey != null) {
+                memory[memorizeKey] = result.toJsonString()
+            }
+
+            notifyComplete(context, result, startMs)
+            result
         }
 
-        return kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+        return block.startCoroutineUninterceptedOrReturn(continuation)
     }
 
+    // ── Blocking resilience (for Future<T> path) ────────────────────────────
+
     private fun <R : Any> executeWithResilience(context: PromptContext, resultClass: KClass<R>): R {
-        var lastException: Exception? = null
-        val maxAttempts = resilience.maxRetries + 1
+        notifyStart(context)
+        acquireRateLimit()
+        concurrencySemaphore?.acquire()
+        try {
+            var lastException: Exception? = null
+            val maxAttempts = resilience.maxRetries + 1
 
-        for (attempt in 1..maxAttempts) {
-            try {
-                val result = executeWithTimeout(adapter, context, resultClass)
+            for (attempt in 1..maxAttempts) {
+                try {
+                    val result = executeWithTimeout(adapter, context, resultClass)
 
-                val validator = resilience.resultValidator
-                if (validator != null && !validator(result)) {
-                    throw ResultValidationException("Result validation failed on attempt $attempt")
-                }
+                    val validator = resilience.resultValidator
+                    if (validator != null && !validator(result)) {
+                        throw ResultValidationException("Result validation failed on attempt $attempt")
+                    }
 
-                return result
-            } catch (e: Exception) {
-                lastException = e
-                logger.warning { "Attempt $attempt/$maxAttempts failed: ${e.message}" }
-                if (attempt < maxAttempts) {
-                    val delay = (resilience.retryDelayMs * resilience.backoffMultiplier.pow(attempt - 1)).toLong()
-                    Thread.sleep(delay)
+                    return result
+                } catch (e: Exception) {
+                    lastException = e
+                    logger.warning { "Attempt $attempt/$maxAttempts failed: ${e.message}" }
+                    if (attempt < maxAttempts) {
+                        val sleepMs = (resilience.retryDelayMs * resilience.backoffMultiplier.pow(attempt - 1)).toLong()
+                        Thread.sleep(sleepMs)
+                    }
                 }
             }
-        }
 
-        val fallback = resilience.fallbackAdapter
-        if (fallback != null) {
-            logger.info { "Primary adapter exhausted, trying fallback" }
-            try {
-                return executeWithTimeout(fallback, context, resultClass)
-            } catch (e: Exception) {
-                throw ShimmerException("All attempts failed including fallback", e)
+            val fallback = resilience.fallbackAdapter
+            if (fallback != null) {
+                logger.info { "Primary adapter exhausted, trying fallback" }
+                try {
+                    return executeWithTimeout(fallback, context, resultClass)
+                } catch (e: Exception) {
+                    throw ShimmerException("All attempts failed including fallback", e)
+                }
             }
-        }
 
-        throw ShimmerException("All $maxAttempts attempt(s) failed", lastException)
+            throw ShimmerException("All $maxAttempts attempt(s) failed", lastException)
+        } finally {
+            concurrencySemaphore?.release()
+        }
     }
 
     private fun <R : Any> executeWithTimeout(adapter: ApiAdapter, context: PromptContext, resultClass: KClass<R>): R {
@@ -200,5 +223,82 @@ class Shimmer<T : Any>(
             future.cancel(true)
             throw ShimmerTimeoutException("Request timed out after ${resilience.timeoutMs}ms", e)
         }
+    }
+
+    // ── Suspend-aware resilience (uses cooperative delay, respects cancellation) ──
+
+    private suspend fun <R : Any> executeSuspendWithResilience(context: PromptContext, resultClass: KClass<R>): R {
+        notifyStart(context)
+        acquireRateLimit()
+        concurrencySemaphore?.acquire()
+        try {
+            var lastException: Exception? = null
+            val maxAttempts = resilience.maxRetries + 1
+
+            for (attempt in 1..maxAttempts) {
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        executeWithTimeout(adapter, context, resultClass)
+                    }
+
+                    val validator = resilience.resultValidator
+                    if (validator != null && !validator(result)) {
+                        throw ResultValidationException("Result validation failed on attempt $attempt")
+                    }
+
+                    return result
+                } catch (e: CancellationException) {
+                    throw e // Respect coroutine cancellation — never retry
+                } catch (e: Exception) {
+                    lastException = e
+                    logger.warning { "Attempt $attempt/$maxAttempts failed: ${e.message}" }
+                    if (attempt < maxAttempts) {
+                        val delayMs = (resilience.retryDelayMs * resilience.backoffMultiplier.pow(attempt - 1)).toLong()
+                        delay(delayMs)
+                    }
+                }
+            }
+
+            val fallback = resilience.fallbackAdapter
+            if (fallback != null) {
+                logger.info { "Primary adapter exhausted, trying fallback" }
+                try {
+                    return withContext(Dispatchers.IO) {
+                        executeWithTimeout(fallback, context, resultClass)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw ShimmerException("All attempts failed including fallback", e)
+                }
+            }
+
+            throw ShimmerException("All $maxAttempts attempt(s) failed", lastException)
+        } finally {
+            concurrencySemaphore?.release()
+        }
+    }
+
+    // ── Listener notifications ─────────────────────────────────────────────
+
+    private fun notifyStart(context: PromptContext) {
+        listeners.forEach { it.onRequestStart(context) }
+    }
+
+    private fun notifyComplete(context: PromptContext, result: Any, startMs: Long) {
+        val duration = System.currentTimeMillis() - startMs
+        listeners.forEach { it.onRequestComplete(context, result, duration) }
+    }
+
+    @Suppress("unused") // Reserved for error-path listener notification
+    private fun notifyError(context: PromptContext, error: Exception, startMs: Long) {
+        val duration = System.currentTimeMillis() - startMs
+        listeners.forEach { it.onRequestError(context, error, duration) }
+    }
+
+    // ── Rate limiting ───────────────────────────────────────────────────────
+
+    private fun acquireRateLimit() {
+        rateLimiter?.acquire()
     }
 }

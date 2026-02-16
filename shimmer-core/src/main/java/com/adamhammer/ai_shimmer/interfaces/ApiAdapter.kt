@@ -1,6 +1,8 @@
 package com.adamhammer.ai_shimmer.interfaces
 
 import com.adamhammer.ai_shimmer.model.PromptContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.reflect.KClass
 
 /**
@@ -32,4 +34,15 @@ interface ApiAdapter {
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R = handleRequest(context, resultClass)
+
+    /**
+     * Streaming request — returns tokens as they arrive.
+     *
+     * Override to provide token-by-token streaming from the AI provider.
+     * The default implementation falls back to the non-streaming [handleRequest],
+     * emitting the full response as a single element.
+     */
+    fun handleRequestStreaming(
+        context: PromptContext
+    ): Flow<String> = flowOf(handleRequest(context, String::class))
 }

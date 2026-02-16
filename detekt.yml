@@ -1,0 +1,55 @@
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    threshold: 80
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 10
+  CyclomaticComplexMethod:
+    threshold: 22
+  TooManyFunctions:
+    thresholdInFiles: 20
+    thresholdInClasses: 20
+  NestedBlockDepth:
+    threshold: 5
+
+style:
+  MaxLineLength:
+    maxLineLength: 130
+  WildcardImport:
+    active: false
+  MagicNumber:
+    active: false
+  ReturnCount:
+    max: 5
+  ForbiddenComment:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+  ThrowsCount:
+    max: 5
+
+performance:
+  SpreadOperator:
+    active: false
+
+naming:
+  PackageNaming:
+    active: false
+  ConstructorParameterNaming:
+    parameterPattern: '_?[a-z][A-Za-z0-9]*'
+  FunctionNaming:
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    excludes: ['**/test/**']
+  MatchingDeclarationName:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  TooGenericExceptionThrown:
+    excludes: ['**/test/**']
+  SwallowedException:
+    active: false

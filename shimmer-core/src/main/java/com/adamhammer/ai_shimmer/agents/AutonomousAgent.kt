@@ -44,26 +44,15 @@ class AutonomousAgent(
     private val apiInstance: ShimmerInstance<AutonomousAIApi>,
     private val decider: DecidingAgentAPI
 ) {
+    private val dispatcher = AgentDispatcher(apiInstance)
+
     /** Secondary constructor for backward compatibility when memory forwarding is not needed. */
     constructor(api: AutonomousAIApi, decider: DecidingAgentAPI) :
         this(ShimmerInstance(api, java.util.concurrent.ConcurrentHashMap(), AutonomousAIApi::class), decider)
 
-    private val api: AutonomousAIApi get() = apiInstance.api
-
     fun step(): String {
-        val decision = decider.decide(ShimmerInstance(api, apiInstance._memory, AutonomousAIApi::class)).get()
-
-        return when (decision.method) {
-            "understand" -> {
-                val data = decision.args["data"]
-                    ?: throw IllegalArgumentException("Missing 'data' argument for understand method")
-                api.understand(data).get()
-            }
-            "analyze" -> api.analyze().get()
-            "plan" -> api.plan().get()
-            "reflect" -> api.reflect().get()
-            "act" -> api.act().get()
-            else -> throw IllegalArgumentException("Unknown method: ${decision.method}")
-        }
+        val decision = decider.decide(ShimmerInstance(apiInstance.api, apiInstance._memory, AutonomousAIApi::class)).get()
+        val result = dispatcher.dispatch(decision)
+        return result?.toString() ?: ""
     }
 }

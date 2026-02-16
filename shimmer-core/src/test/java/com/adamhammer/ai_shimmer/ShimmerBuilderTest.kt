@@ -91,7 +91,7 @@ class ShimmerBuilderTest {
 }
 
 // Test helper: an adapter class with required constructor params
-class NoDefaultConstructorAdapter(required: String) : com.adamhammer.ai_shimmer.interfaces.ApiAdapter {
+class NoDefaultConstructorAdapter(@Suppress("unused") required: String) : com.adamhammer.ai_shimmer.interfaces.ApiAdapter {
     override fun <R : Any> handleRequest(context: PromptContext, resultClass: kotlin.reflect.KClass<R>): R {
         throw UnsupportedOperationException()
     }

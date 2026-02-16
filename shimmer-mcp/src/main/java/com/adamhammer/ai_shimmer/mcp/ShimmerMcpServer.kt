@@ -92,8 +92,9 @@ class ShimmerMcpServer private constructor(
             expose(implementation, T::class)
 
         fun build(): ShimmerMcpServer {
-            val transport = transportProvider
-                ?: throw IllegalStateException("Transport provider must be set")
+            val transport = checkNotNull(transportProvider) {
+                "Transport provider must be set"
+            }
 
             var spec = McpServer.sync(transport)
                 .serverInfo(serverName, serverVersion)
@@ -145,7 +146,11 @@ class ShimmerMcpServer private constructor(
         private fun <T : Any> buildToolHandler(
             implementation: T,
             method: Method
-        ): java.util.function.BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, McpSchema.CallToolRequest, McpSchema.CallToolResult> {
+        ): java.util.function.BiFunction<
+            io.modelcontextprotocol.server.McpSyncServerExchange,
+            McpSchema.CallToolRequest,
+            McpSchema.CallToolResult
+        > {
             return java.util.function.BiFunction { _, request ->
                 try {
                     val args = resolveMethodArguments(method, request.arguments() ?: emptyMap())
@@ -164,10 +169,15 @@ class ShimmerMcpServer private constructor(
                         .addTextContent(content)
                         .isError(false)
                         .build()
-                } catch (e: Exception) {
-                    val cause = if (e is java.lang.reflect.InvocationTargetException) e.cause ?: e else e
+                } catch (e: java.lang.reflect.InvocationTargetException) {
+                    val cause = e.cause ?: e
                     McpSchema.CallToolResult.builder()
                         .addTextContent("Error: ${cause.message}")
+                        .isError(true)
+                        .build()
+                } catch (e: Exception) {
+                    McpSchema.CallToolResult.builder()
+                        .addTextContent("Error: ${e.message}")
                         .isError(true)
                         .build()
                 }

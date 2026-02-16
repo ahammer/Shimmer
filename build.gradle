@@ -1,3 +1,14 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+        classpath 'io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.7'
+    }
+}
+
 allprojects {
     repositories {
         mavenCentral()
@@ -7,4 +18,38 @@ allprojects {
 subprojects {
     group = 'com.adamhammer.shimmer'
     version = '1.0.0'
+
+    // Apply jacoco and detekt to Kotlin subprojects
+    pluginManager.withPlugin('org.jetbrains.kotlin.jvm') {
+        apply plugin: 'jacoco'
+        apply plugin: 'io.gitlab.arturbosch.detekt'
+
+        jacoco {
+            toolVersion = '0.8.12'
+        }
+
+        tasks.withType(Test).configureEach {
+            finalizedBy jacocoTestReport
+        }
+
+        jacocoTestReport {
+            dependsOn test
+            reports {
+                xml.required = true
+                html.required = true
+            }
+        }
+
+        detekt {
+            buildUponDefaultConfig = true
+            config.setFrom(rootProject.files('detekt.yml'))
+        }
+
+        // Samples are demo code — warn but don't fail the build
+        if (project.name.startsWith('samples-')) {
+            detekt {
+                ignoreFailures = true
+            }
+        }
+    }
 }

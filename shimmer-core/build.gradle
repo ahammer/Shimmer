@@ -17,7 +17,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     api "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
     api "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0"
-    implementation 'org.jetbrains.kotlin:kotlin-reflect'
+    api 'org.jetbrains.kotlin:kotlin-reflect'
     testImplementation project(':shimmer-test')
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0"

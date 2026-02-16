@@ -4,6 +4,7 @@ import com.adamhammer.ai_shimmer.context.DefaultContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
+import com.adamhammer.ai_shimmer.interfaces.RequestListener
 import com.adamhammer.ai_shimmer.interfaces.ToolProvider
 import com.adamhammer.ai_shimmer.model.PromptContext
 import com.adamhammer.ai_shimmer.model.ResiliencePolicy
@@ -45,6 +46,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     private var contextBuilder: ContextBuilder = DefaultContextBuilder()
     private val interceptors = mutableListOf<Interceptor>()
     private val toolProviders = mutableListOf<ToolProvider>()
+    private val listeners = mutableListOf<RequestListener>()
     private var resiliencePolicy: ResiliencePolicy = ResiliencePolicy()
 
     // ── DSL-style configuration ─────────────────────────────────────────────
@@ -91,6 +93,12 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         return this
     }
 
+    /** Register a request lifecycle listener for metrics, logging, or cost tracking. */
+    fun listener(listener: RequestListener): ShimmerBuilder<T> {
+        this.listeners.add(listener)
+        return this
+    }
+
     // ── Legacy Java-style API (kept for backward compatibility) ─────────────
 
     fun <U : ApiAdapter> setAdapterClass(adapterClass: KClass<U>): ShimmerBuilder<T> {
@@ -119,7 +127,13 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         val resolvedAdapter = adapter
             ?: throw ShimmerConfigurationException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
 
-        val shimmer = Shimmer<T>(resolvedAdapter, contextBuilder, interceptors.toList(), resiliencePolicy, toolProviders.toList())
+        val memory: MutableMap<String, String> = ConcurrentHashMap()
+
+        val shimmer = Shimmer<T>(
+            resolvedAdapter, contextBuilder, interceptors.toList(),
+            resiliencePolicy, toolProviders.toList(), memory, apiInterface,
+            listeners.toList()
+        )
 
         val proxyInstance = Proxy.newProxyInstance(
             apiInterface.java.classLoader,
@@ -127,9 +141,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
             shimmer
         )
 
-        val instance = ShimmerInstance(apiInterface.java.cast(proxyInstance), ConcurrentHashMap(), apiInterface)
-        shimmer.instance = instance
-        return instance
+        return ShimmerInstance(apiInterface.java.cast(proxyInstance), memory, apiInterface)
     }
 }
 
@@ -144,6 +156,8 @@ class ResiliencePolicyBuilder {
     var timeoutMs: Long = 0
     var resultValidator: ((Any) -> Boolean)? = null
     var fallbackAdapter: ApiAdapter? = null
+    var maxConcurrentRequests: Int = 0
+    var maxRequestsPerMinute: Int = 0
 
     fun build() = ResiliencePolicy(
         maxRetries = maxRetries,
@@ -151,7 +165,9 @@ class ResiliencePolicyBuilder {
         backoffMultiplier = backoffMultiplier,
         timeoutMs = timeoutMs,
         resultValidator = resultValidator,
-        fallbackAdapter = fallbackAdapter
+        fallbackAdapter = fallbackAdapter,
+        maxConcurrentRequests = maxConcurrentRequests,
+        maxRequestsPerMinute = maxRequestsPerMinute
     )
 }
 

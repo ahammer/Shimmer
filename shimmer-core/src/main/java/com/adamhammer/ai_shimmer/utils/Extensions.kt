@@ -1,11 +1,9 @@
-@file:OptIn(InternalSerializationApi::class)
 package com.adamhammer.ai_shimmer.utils
 
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.*
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
+import kotlin.reflect.full.createType
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.declaredFunctions
@@ -81,7 +79,10 @@ fun KClass<*>.toJsonStructure(): JsonElement = when {
 
 fun KClass<*>.toJsonStructureString(): String = json.encodeToString(toJsonStructure())
 
-fun Method.toJsonInvocation(args: Array<out Any>? = null, memory: Map<String, String> = emptyMap()): JsonObject = buildJsonObject {
+fun Method.toJsonInvocation(
+    args: Array<out Any>? = null,
+    memory: Map<String, String> = emptyMap()
+): JsonObject = buildJsonObject {
     val operation = getAnnotation(AiOperation::class.java)
     put("method", buildString {
         append(name)
@@ -129,12 +130,11 @@ fun Method.toJsonInvocationString(args: Array<out Any>? = null, memory: Map<Stri
     return json.encodeToString(jsonObject)
 }
 
-@OptIn(InternalSerializationApi::class)
 fun Any?.toJsonElement(): JsonElement = when (this) {
     null -> JsonNull
     else -> try {
-        @Suppress("UNCHECKED_CAST")
-        json.encodeToJsonElement((this::class.serializer() as KSerializer<Any>), this)
+        val serializer = serializer(this::class.createType())
+        json.encodeToJsonElement(serializer, this)
     } catch (e: Exception) {
         JsonPrimitive("(error encoding to JSON: ${e.message})")
     }
