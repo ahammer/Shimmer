@@ -2,6 +2,7 @@ package com.adamhammer.ai_shimmer.adapters
 
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.model.PromptContext
+import com.adamhammer.ai_shimmer.model.ShimmerDeserializationException
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.ChatCompletion
@@ -15,16 +16,18 @@ import kotlin.reflect.KClass
 import java.util.logging.Logger
 
 class OpenAiAdapter(
-    private val model: ChatModel = ChatModel.GPT_4O_MINI
+    private val model: ChatModel = ChatModel.GPT_4O_MINI,
+    client: OpenAIClient? = null
 ) : ApiAdapter {
     private val logger = Logger.getLogger(OpenAiAdapter::class.java.name)
 
-    private val apiKey: String = System.getenv("OPENAI_API_KEY")
-        ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")
-
-    private val client: OpenAIClient = OpenAIOkHttpClient.builder()
-        .apiKey(apiKey)
-        .build()
+    private val client: OpenAIClient = client ?: run {
+        val apiKey = System.getenv("OPENAI_API_KEY")
+            ?: throw IllegalStateException("OPENAI_API_KEY environment variable not set.")
+        OpenAIOkHttpClient.builder()
+            .apiKey(apiKey)
+            .build()
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -42,23 +45,22 @@ class OpenAiAdapter(
             "\n\n# MEMORY\n$memoryJson"
         } else ""
 
-        val prompt = """
-${context.systemInstructions}
-
+        val userPrompt = """
 # METHOD
 ${context.methodInvocation}$memorySection""".trimIndent()
 
         val params = ChatCompletionCreateParams.builder()
-            .addUserMessage(prompt)
+            .addSystemMessage(context.systemInstructions)
+            .addUserMessage(userPrompt)
             .model(model)
             .build()
 
-        logger.fine { "Request:\n$prompt" }
+        logger.fine { "System:\n${context.systemInstructions}\nUser:\n$userPrompt" }
 
         val chatCompletion: ChatCompletion = client.chat().completions().create(params)
 
         val completionText = chatCompletion.choices().firstOrNull()?.message()?.content()?.get()?.trim()
-            ?: throw RuntimeException("No response from OpenAI API")
+            ?: throw ShimmerDeserializationException("No response from OpenAI API")
 
         logger.fine { "Response:\n$completionText" }
 
@@ -82,11 +84,14 @@ ${context.methodInvocation}$memorySection""".trimIndent()
             val serializer = resultClass.serializer() as KSerializer<R>
             return json.decodeFromString(serializer, jsonResponse)
         } catch (e: Exception) {
-            throw RuntimeException("Failed to deserialize JSON response: ${e.message}", e)
+            throw ShimmerDeserializationException(
+                "Failed to deserialize response into ${resultClass.simpleName}: ${e.message}\nRaw response: $jsonResponse",
+                e
+            )
         }
     }
 
-    private fun extractJson(text: String): String {
+    internal fun extractJson(text: String): String {
         val objectStartIndex = text.indexOf('{')
         val objectEndIndex = text.lastIndexOf('}')
         if (objectStartIndex != -1 && objectEndIndex != -1 && objectStartIndex < objectEndIndex) {

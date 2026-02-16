@@ -5,6 +5,7 @@ import com.adamhammer.ai_shimmer.annotations.*
 import kotlinx.serialization.Serializable
 import java.util.concurrent.Future
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 @Serializable
@@ -74,6 +75,7 @@ class SimpleAgent(private val api: SimpleAIApi) {
 class BasicAgentTest {
 
     @Test
+    @Tag("live")
     fun testIdeate() {
         val api = ShimmerBuilder(SimpleAIApi::class)
             .setAdapterClass(OpenAiAdapter::class)

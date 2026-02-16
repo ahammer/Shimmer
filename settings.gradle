@@ -1,7 +1,8 @@
 pluginManagement {
     plugins {
         id 'org.jetbrains.kotlin.jvm' version '2.0.21'
+        id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
     }
 }
-rootProject.name = 'AiApiShimmer'
-include 'shimmer-core', 'shimmer-openai', 'samples-dnd'
+rootProject.name = 'shimmer'
+include 'shimmer-core', 'shimmer-test', 'shimmer-openai', 'samples-dnd'

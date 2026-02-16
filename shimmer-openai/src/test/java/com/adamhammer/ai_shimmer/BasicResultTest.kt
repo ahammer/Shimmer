@@ -8,6 +8,7 @@ import java.util.concurrent.Future
 import kotlinx.serialization.Serializable
 
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Tag
 
 class AiApiShimmerTest {
 
@@ -68,6 +69,7 @@ class AiApiShimmerTest {
     }
 
     @Test
+    @Tag("live")
     fun testJsonApi() {
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
@@ -80,6 +82,7 @@ class AiApiShimmerTest {
     }
 
     @Test
+    @Tag("live")
     fun testStringApi() {
         val answer = ShimmerBuilder(QuestionAPI::class)
             .setAdapterClass(OpenAiAdapter::class)

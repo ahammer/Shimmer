@@ -1,7 +1,11 @@
 package com.adamhammer.ai_shimmer.agents
 
 import com.adamhammer.ai_shimmer.ShimmerInstance
-import com.adamhammer.ai_shimmer.annotations.*
+import com.adamhammer.ai_shimmer.annotations.AiOperation
+import com.adamhammer.ai_shimmer.annotations.AiParameter
+import com.adamhammer.ai_shimmer.annotations.AiResponse
+import com.adamhammer.ai_shimmer.annotations.AiSchema
+import com.adamhammer.ai_shimmer.annotations.Memorize
 import java.util.concurrent.Future
 
 @AiSchema(description = "Autonomous agent that reflects on user input and delivers a result")
@@ -10,7 +14,6 @@ interface AutonomousAIApi {
     @AiOperation(description = "Accept input from the user and try to understand it")
     @AiResponse(description = "Rephrase and clarify the user's input.", responseClass = String::class)
     @Memorize(label = "Users Intent")
-    @Subscribe(channel = "User Input")
     fun understand(
         @AiParameter(description = "The user's input we are trying to understand.")
         data: String
@@ -34,7 +37,6 @@ interface AutonomousAIApi {
     @AiOperation(description = "Deliver the result")
     @AiResponse(description = "The final result/communication", responseClass = String::class)
     @Memorize(label = "act")
-    @Publish("output")
     fun act(): Future<String>
 }
 

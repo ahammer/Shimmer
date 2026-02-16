@@ -5,7 +5,6 @@ allprojects {
 }
 
 subprojects {
-    // Optionally, add common configurations for all subprojects
-    // For example:
-    // apply plugin: 'java'
+    group = 'com.adamhammer.shimmer'
+    version = '1.0.0'
 }

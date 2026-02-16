@@ -10,6 +10,7 @@ import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.declaredFunctions
 import java.lang.reflect.Method
+import java.lang.reflect.ParameterizedType
 
 import com.adamhammer.ai_shimmer.annotations.AiOperation
 import com.adamhammer.ai_shimmer.annotations.AiParameter
@@ -107,7 +108,18 @@ fun Method.toJsonInvocation(args: Array<out Any>? = null, memory: Map<String, St
         })
     }
 
-    val responseSchema = getAnnotation(AiResponse::class.java)?.responseClass ?: returnType.kotlin
+    val responseAnnotation = getAnnotation(AiResponse::class.java)
+    val responseSchema = if (responseAnnotation != null && responseAnnotation.responseClass != Unit::class) {
+        responseAnnotation.responseClass
+    } else {
+        // Extract the generic type argument from Future<T> (or similar parameterized return types)
+        val generic = genericReturnType
+        if (generic is ParameterizedType) {
+            (generic.actualTypeArguments.firstOrNull() as? Class<*>)?.kotlin ?: returnType.kotlin
+        } else {
+            returnType.kotlin
+        }
+    }
     put("resultSchema", responseSchema.toJsonStructure())
 }
 

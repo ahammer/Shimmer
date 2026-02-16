@@ -10,6 +10,7 @@ import com.adamhammer.ai_shimmer.annotations.AiOperation
 import com.adamhammer.ai_shimmer.annotations.AiParameter
 import com.adamhammer.ai_shimmer.annotations.AiResponse
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Tag
 
 @Serializable
 @AiSchema(title = "CardRank", description = "The rank of a playing card")
@@ -76,6 +77,7 @@ interface HigherCardAPI {
 class HigherCardApiTest {
 
     @Test
+    @Tag("live")
     fun testDrawHigherCardDefined() {
         val api = ShimmerBuilder(HigherCardAPI::class)
             .setAdapterClass(OpenAiAdapter::class)
@@ -88,6 +90,7 @@ class HigherCardApiTest {
     }
 
     @Test
+    @Tag("live")
     fun testDrawHigherCardUndefined() {
         val api = ShimmerBuilder(HigherCardAPI::class)
             .setAdapterClass(OpenAiAdapter::class)

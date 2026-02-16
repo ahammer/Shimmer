@@ -6,24 +6,6 @@ import kotlin.reflect.KClass
 @Retention(AnnotationRetention.RUNTIME)
 annotation class Memorize(val label: String)
 
-@Target(
-    AnnotationTarget.FUNCTION,
-    AnnotationTarget.PROPERTY,
-    AnnotationTarget.FIELD,
-    AnnotationTarget.VALUE_PARAMETER
-)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class Subscribe(val channel: String)
-
-@Target(
-    AnnotationTarget.FUNCTION,
-    AnnotationTarget.PROPERTY,
-    AnnotationTarget.FIELD,
-    AnnotationTarget.VALUE_PARAMETER
-)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class Publish(val channel: String)
-
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class AiOperation(
@@ -44,7 +26,7 @@ annotation class AiParameter(
     val description: String = ""
 )
 
-@Target(AnnotationTarget.CLASS, AnnotationTarget.FIELD)
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FIELD, AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class AiSchema(
     val title: String = "",

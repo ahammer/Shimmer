@@ -9,22 +9,24 @@ A **Retrofit-style interface abstraction for AI APIs** in Kotlin. Define an inte
 ```kotlin
 interface QuestionAPI {
     @AiOperation(description = "Provide an in-depth answer to the question")
-    fun askQuestion(
+    suspend fun askQuestion(
         @AiParameter(description = "The question to be answered")
         question: String
-    ): Future<String>
+    ): String
 }
 
-val api = ShimmerBuilder(QuestionAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build().api
+val instance = shimmer<QuestionAPI> {
+    adapter(OpenAiAdapter())
+}
 
-val answer = api.askQuestion("What is the meaning of life?").get()
+val answer = instance.api.askQuestion("What is the meaning of life?")
 ```
 
 ## Features
 
 - **Interface-driven** — define AI interactions as Kotlin interfaces
+- **Kotlin DSL** — configure with `shimmer<T> { ... }` builder DSL
+- **Coroutine support** — `suspend` functions work natively alongside `Future<T>`
 - **Annotation metadata** — describe operations, parameters, and response schemas for the AI
 - **Adapter pattern** — swap AI providers without changing your interface (OpenAI included)
 - **Context control** — replace or intercept the prompt pipeline with `ContextBuilder` and `Interceptor`
@@ -32,7 +34,7 @@ val answer = api.askQuestion("What is the meaning of life?").get()
 - **Memory system** — persist results across calls with `@Memorize` for stateful conversations
 - **Type-safe responses** — get deserialized Kotlin objects back, not raw strings
 - **Agent patterns** — build multi-step and decision-making AI workflows
-- **Async by default** — all operations return `Future<T>`
+- **Test-first** — `shimmer-test` module with `MockAdapter`, test helpers, and prompt assertions
 
 ## Project Structure
 
@@ -40,6 +42,7 @@ val answer = api.askQuestion("What is the meaning of life?").get()
 |--------|-------------|
 | `shimmer-core` | Core library — annotations, proxy, context pipeline, resilience. Zero AI-provider dependencies. |
 | `shimmer-openai` | OpenAI adapter — sends `PromptContext` to OpenAI and deserializes responses. |
+| `shimmer-test` | Test utilities — `MockAdapter`, prompt assertions, test fixtures, `shimmerTest<T>()` / `shimmerStub<T>()` helpers. |
 | `samples-dnd` | Sample app — a text-based D&D adventure with the AI as Dungeon Master. |
 
 ## Installation
@@ -58,37 +61,33 @@ Then add the modules as dependencies in your project:
 dependencies {
     implementation project(':shimmer-core')
     implementation project(':shimmer-openai')   // or your own adapter
+    testImplementation project(':shimmer-test')  // test utilities
 }
 ```
+
+All library modules include `maven-publish` configuration for local or remote publishing.
 
 ## Quick Start
 
 ### 1. Define your API interface
 
+Methods can return `Future<T>` or use `suspend`:
+
 ```kotlin
 interface QuestionAPI {
-    @AiOperation(
-        summary = "Ask",
-        description = "Provide an in-depth answer to the question within its context."
-    )
-    @AiResponse(
-        description = "The answer to the question",
-        responseClass = Answer::class
-    )
-    fun askStruct(
+    @AiOperation(description = "Answer the question in depth")
+    @AiResponse(description = "The answer", responseClass = Answer::class)
+    suspend fun askStruct(
         @AiParameter(description = "The question and its context")
-        question: Question?
-    ): Future<Answer?>
+        question: Question
+    ): Answer
 
-    @AiOperation(
-        summary = "AskString",
-        description = "Answer the question, returning a plain string."
-    )
-    @Memorize("The last answer to the question.")
+    @AiOperation(description = "Answer the question as plain text")
+    @Memorize("last-answer")
     fun askString(
-        @AiParameter(description = "The question and its context")
-        question: Question?
-    ): Future<String?>
+        @AiParameter(description = "The question")
+        question: String
+    ): Future<String>
 }
 ```
 
@@ -96,18 +95,18 @@ interface QuestionAPI {
 
 ```kotlin
 @Serializable
-@AiSchema(title = "Question", description = "Holds info about the question")
-class Question(
-    @field:AiSchema(title = "Question", description = "The question to be asked")
+@AiSchema(description = "Holds info about the question")
+data class Question(
+    @AiSchema(description = "The question to be asked")
     val question: String = "",
-    @field:AiSchema(title = "Context", description = "Who is asking the question")
+    @AiSchema(description = "Who is asking the question")
     val context: String = ""
 )
 
 @Serializable
-@AiSchema(title = "The Answer", description = "Holds the answer to the question.")
-class Answer(
-    @field:AiSchema(title = "Answer", description = "A deep answer to the question")
+@AiSchema(description = "Holds the answer to the question")
+data class Answer(
+    @AiSchema(description = "A deep answer to the question")
     val answer: String = ""
 )
 ```
@@ -115,14 +114,21 @@ class Answer(
 ### 3. Build and use
 
 ```kotlin
-// Requires OPENAI_API_KEY environment variable
-val api = ShimmerBuilder(QuestionAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .build().api
+// DSL style (recommended)
+val instance = shimmer<QuestionAPI> {
+    adapter(OpenAiAdapter())
+    resilience {
+        maxRetries = 2
+        timeoutMs = 30_000
+    }
+}
 
-val question = Question("What is the meaning of life?", "A curious student")
-val answer = api.askStruct(question).get()
-println(answer?.answer)
+val answer = instance.api.askStruct(Question("What is the meaning of life?", "A curious student"))
+
+// Builder style (also supported)
+val instance2 = ShimmerBuilder(QuestionAPI::class)
+    .setAdapterDirect(OpenAiAdapter())
+    .build()
 ```
 
 ## Architecture
@@ -142,7 +148,7 @@ graph TD
 
 1. You define an interface with methods representing AI operations
 2. Annotations provide metadata about operations, parameters, and expected response schemas
-3. `ShimmerBuilder` creates a JDK dynamic proxy implementing your interface
+3. `shimmer<T> { ... }` (or `ShimmerBuilder`) creates a JDK dynamic proxy implementing your interface
 4. The proxy builds a `ShimmerRequest` and passes it to a `ContextBuilder`
 5. The `ContextBuilder` assembles a `PromptContext` (system instructions + method invocation JSON)
 6. `Interceptor`s modify the context in registration order (inject world state, filter memory, etc.)
@@ -155,39 +161,41 @@ graph TD
 The `ContextBuilder` and `Interceptor` interfaces give you full control over how prompts are constructed:
 
 ```kotlin
-val api = ShimmerBuilder(MyAPI::class)
-    .setAdapterClass(OpenAiAdapter::class)
-    .setContextBuilder(myCustomContextBuilder)         // replace how prompts are built
-    .addInterceptor { ctx ->                           // inject extra context
+val instance = shimmer<MyAPI> {
+    adapter(OpenAiAdapter())
+    contextBuilder(myCustomContextBuilder)
+    interceptor { ctx ->
         ctx.copy(systemInstructions = ctx.systemInstructions + "\nBe concise.")
     }
-    .addInterceptor(WorldStateInterceptor { world })   // inject game state
-    .build().api
+    interceptor { ctx ->
+        ctx.copy(properties = ctx.properties + ("world" to worldState))
+    }
+}
 ```
 
 ### Resilience
 
-Configure retry, timeout, validation, and fallback behavior per `ShimmerBuilder`:
+Configure retry, timeout, validation, and fallback behavior:
 
 ```kotlin
-val api = ShimmerBuilder(MyAPI::class)
-    .setAdapterDirect(primaryAdapter)
-    .setResiliencePolicy(ResiliencePolicy(
-        maxRetries = 3,                                 // retry up to 3 times on failure
-        retryDelayMs = 1000,                            // initial delay between retries
-        backoffMultiplier = 2.0,                        // exponential backoff
-        timeoutMs = 30_000,                             // per-call timeout
-        resultValidator = { result ->                   // reject invalid results
+val instance = shimmer<MyAPI> {
+    adapter(primaryAdapter)
+    resilience {
+        maxRetries = 3
+        retryDelayMs = 1000
+        backoffMultiplier = 2.0
+        timeoutMs = 30_000
+        resultValidator = { result ->
             (result as? MyResult)?.isValid == true
-        },
-        fallbackAdapter = StubAdapter()                 // use fallback after exhausting retries
-    ))
-    .build().api
+        }
+        fallbackAdapter = StubAdapter()
+    }
+}
 ```
 
 ### Memory
 
-Methods annotated with `@Memorize` store their results in a shared memory map, which is passed to subsequent requests. This enables multi-step workflows where context accumulates:
+Methods annotated with `@Memorize` store their results (as JSON) in a shared memory map, which is passed to subsequent requests:
 
 ```kotlin
 @Memorize("user-input")
@@ -195,6 +203,84 @@ fun storeInput(input: String): Future<String>
 
 // Subsequent calls receive the stored memory automatically
 fun retrieveWithContext(): Future<String>
+```
+
+Read memory state via `instance.memory` (read-only map).
+
+### Coroutines
+
+Shimmer supports both `Future<T>` and `suspend` functions:
+
+```kotlin
+interface MyAPI {
+    // Future-based
+    fun getData(): Future<Result>
+
+    // Coroutine-based
+    suspend fun getDataAsync(): Result
+}
+```
+
+Suspend functions are automatically detected and executed on `Dispatchers.IO`.
+
+## Testing
+
+The `shimmer-test` module provides everything you need for offline testing:
+
+### MockAdapter
+
+```kotlin
+// Scripted responses
+val mock = MockAdapter.scripted(result1, result2)
+val (api, mock) = shimmerTest<MyAPI>(mock)
+api.get().get()
+mock.verifyCallCount(1)
+mock.lastContext!!.assertSystemInstructionsContain("specialized AI")
+
+// Dynamic responses
+val mock = MockAdapter.dynamic { context, resultClass ->
+    if (resultClass == String::class) "dynamic" else MyResult("computed")
+}
+
+// Builder for complex scenarios
+val mock = MockAdapter.builder()
+    .responses(result1, result2)
+    .delayMs(500)           // simulate latency
+    .failOnCall(0)          // throw on first call
+    .build()
+```
+
+### Test Helpers
+
+```kotlin
+// Quick setup with MockAdapter
+val (api, mock) = shimmerTest<MyAPI>(MockAdapter.scripted(result))
+
+// Quick setup with StubAdapter (returns defaults)
+val api = shimmerStub<MyAPI>()
+```
+
+### Prompt Assertions
+
+```kotlin
+mock.lastContext!!
+    .assertSystemInstructionsContain("specialized AI")
+    .assertMethodInvocationContains("greet")
+    .assertMemoryContains("key", "value")
+    .assertMemoryEmpty()
+    .assertPropertyEquals("key", expectedValue)
+```
+
+### Live Test Isolation
+
+Tests that call the real OpenAI API are tagged with `@Tag("live")` and excluded by default:
+
+```bash
+# Run only offline tests (default)
+./gradlew test
+
+# Include live tests (requires OPENAI_API_KEY)
+./gradlew test -PliveTests
 ```
 
 ## Sample: Text D&D (`samples-dnd`)
@@ -239,7 +325,7 @@ class MyAdapter : ApiAdapter {
 | `@AiOperation` | Methods | Describes the AI operation (summary, description) |
 | `@AiParameter` | Parameters | Describes a method parameter |
 | `@AiResponse` | Methods | Specifies the expected response type and description |
-| `@AiSchema` | Classes, Fields | Provides metadata for data structure schemas |
+| `@AiSchema` | Classes, Properties, Fields | Provides metadata for data structure schemas |
 | `@Memorize` | Methods | Stores the method result in shared memory |
 
 ### Core Interfaces
@@ -256,6 +342,17 @@ class MyAdapter : ApiAdapter {
 |---------|--------|---------|
 | `OpenAiAdapter` | `shimmer-openai` | OpenAI API (configurable model, defaults to GPT-4o-mini) |
 | `StubAdapter` | `shimmer-core` | Returns default-constructed instances for testing |
+| `MockAdapter` | `shimmer-test` | Configurable test adapter with scripted/dynamic responses and prompt capture |
+
+### Exception Types
+
+| Exception | When |
+|-----------|------|
+| `ShimmerException` | Base exception for all Shimmer errors |
+| `ShimmerTimeoutException` | Request timed out |
+| `ShimmerConfigurationException` | Invalid builder configuration |
+| `ShimmerDeserializationException` | Failed to deserialize AI response |
+| `ResultValidationException` | Result rejected by validator |
 
 ### Model Classes
 
@@ -268,4 +365,3 @@ class MyAdapter : ApiAdapter {
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-

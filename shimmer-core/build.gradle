@@ -1,14 +1,8 @@
 plugins {
     id 'java-library'
-    id 'org.jetbrains.kotlin.jvm' version '2.0.21'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
-}
-
-group = 'com.adamhammer.ai_shimmer'
-version = '1.0.0'
-
-repositories {
-    mavenCentral()
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'maven-publish'
 }
 
 test {
@@ -21,8 +15,20 @@ test {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
+    api "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0"
     implementation 'org.jetbrains.kotlin:kotlin-reflect'
+    testImplementation project(':shimmer-test')
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0"
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            artifactId = 'shimmer-core'
+        }
+    }
 }
