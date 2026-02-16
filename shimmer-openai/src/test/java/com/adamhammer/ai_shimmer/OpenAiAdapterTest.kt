@@ -38,6 +38,7 @@ class OpenAiAdapterTest {
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of(responseText)
+        every { message.toolCalls() } returns Optional.empty()
     }
 
     // ── extractJson tests ──────────────────────────────────────────────────
@@ -181,6 +182,7 @@ class OpenAiAdapterTest {
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
+        every { message.toolCalls() } returns Optional.empty()
 
         val context = PromptContext(
             systemInstructions = "test",
@@ -211,6 +213,7 @@ class OpenAiAdapterTest {
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
+        every { message.toolCalls() } returns Optional.empty()
 
         val context = PromptContext(
             systemInstructions = "test",
@@ -312,6 +315,7 @@ class OpenAiAdapterTest {
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
+        every { message.toolCalls() } returns Optional.empty()
 
         val context = PromptContext(
             systemInstructions = "test",

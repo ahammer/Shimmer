@@ -4,6 +4,7 @@ import com.adamhammer.ai_shimmer.context.DefaultContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
+import com.adamhammer.ai_shimmer.interfaces.ToolProvider
 import com.adamhammer.ai_shimmer.model.PromptContext
 import com.adamhammer.ai_shimmer.model.ResiliencePolicy
 import com.adamhammer.ai_shimmer.model.ShimmerConfigurationException
@@ -43,6 +44,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     private var adapter: ApiAdapter? = null
     private var contextBuilder: ContextBuilder = DefaultContextBuilder()
     private val interceptors = mutableListOf<Interceptor>()
+    private val toolProviders = mutableListOf<ToolProvider>()
     private var resiliencePolicy: ResiliencePolicy = ResiliencePolicy()
 
     // ── DSL-style configuration ─────────────────────────────────────────────
@@ -77,6 +79,18 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         return this
     }
 
+    /** Register a tool provider. Tools from all providers are made available to adapters. */
+    fun toolProvider(provider: ToolProvider): ShimmerBuilder<T> {
+        this.toolProviders.add(provider)
+        return this
+    }
+
+    /** Register multiple tool providers. */
+    fun toolProviders(providers: List<ToolProvider>): ShimmerBuilder<T> {
+        this.toolProviders.addAll(providers)
+        return this
+    }
+
     // ── Legacy Java-style API (kept for backward compatibility) ─────────────
 
     fun <U : ApiAdapter> setAdapterClass(adapterClass: KClass<U>): ShimmerBuilder<T> {
@@ -105,7 +119,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         val resolvedAdapter = adapter
             ?: throw ShimmerConfigurationException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
 
-        val shimmer = Shimmer<T>(resolvedAdapter, contextBuilder, interceptors.toList(), resiliencePolicy)
+        val shimmer = Shimmer<T>(resolvedAdapter, contextBuilder, interceptors.toList(), resiliencePolicy, toolProviders.toList())
 
         val proxyInstance = Proxy.newProxyInstance(
             apiInterface.java.classLoader,

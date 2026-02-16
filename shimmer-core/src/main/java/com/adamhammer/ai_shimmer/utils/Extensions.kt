@@ -16,6 +16,7 @@ import com.adamhammer.ai_shimmer.annotations.AiOperation
 import com.adamhammer.ai_shimmer.annotations.AiParameter
 import com.adamhammer.ai_shimmer.annotations.AiResponse
 import com.adamhammer.ai_shimmer.annotations.AiSchema
+import com.adamhammer.ai_shimmer.model.ToolDefinition
 
 private val json = Json { prettyPrint = true }
 
@@ -164,3 +165,69 @@ fun KClass<*>.toJsonClassMetadata(): JsonObject = buildJsonObject {
 
 fun KClass<*>.toJsonClassMetadataString(): String =
     json.encodeToString(toJsonClassMetadata())
+
+/**
+ * Converts an annotated interface method into a provider-agnostic [ToolDefinition].
+ *
+ * Builds a JSON Schema `inputSchema` from [AiParameter] annotations and parameter types,
+ * and an `outputSchema` from the return type / [AiResponse] annotation.
+ */
+fun Method.toToolDefinition(): ToolDefinition {
+    val operation = getAnnotation(AiOperation::class.java)
+    val description = when {
+        operation?.description?.isNotBlank() == true -> operation.description
+        operation?.summary?.isNotBlank() == true -> operation.summary
+        else -> name
+    }
+
+    val inputSchema = buildJsonObject {
+        put("type", "object")
+        val props = buildJsonObject {
+            parameters.forEach { param ->
+                val paramDesc = param.getAnnotation(AiParameter::class.java)?.description ?: param.name
+                val paramType = param.type.kotlin
+                put(param.name, buildJsonObject {
+                    put("type", when (paramType) {
+                        String::class -> "string"
+                        Int::class, Long::class -> "integer"
+                        Double::class, Float::class -> "number"
+                        Boolean::class -> "boolean"
+                        else -> "string"
+                    })
+                    put("description", paramDesc)
+                })
+            }
+        }
+        put("properties", props)
+        put("required", JsonArray(parameters.map { JsonPrimitive(it.name) }))
+    }
+
+    val responseAnnotation = getAnnotation(AiResponse::class.java)
+    val responseSchema = if (responseAnnotation != null && responseAnnotation.responseClass != Unit::class) {
+        responseAnnotation.responseClass
+    } else {
+        val generic = genericReturnType
+        if (generic is ParameterizedType) {
+            (generic.actualTypeArguments.firstOrNull() as? Class<*>)?.kotlin ?: returnType.kotlin
+        } else {
+            returnType.kotlin
+        }
+    }
+    val outputSchemaStr = responseSchema.toJsonStructureString()
+
+    return ToolDefinition(
+        name = name,
+        description = description,
+        inputSchema = json.encodeToString(inputSchema),
+        outputSchema = outputSchemaStr
+    )
+}
+
+/**
+ * Converts all annotated methods on an interface into [ToolDefinition]s.
+ */
+fun KClass<*>.toToolDefinitions(): List<ToolDefinition> {
+    return java.declaredMethods
+        .filter { it.isAnnotationPresent(AiOperation::class.java) }
+        .map { it.toToolDefinition() }
+}

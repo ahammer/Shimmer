@@ -4,6 +4,7 @@ import com.adamhammer.ai_shimmer.annotations.Memorize
 import com.adamhammer.ai_shimmer.interfaces.ApiAdapter
 import com.adamhammer.ai_shimmer.interfaces.ContextBuilder
 import com.adamhammer.ai_shimmer.interfaces.Interceptor
+import com.adamhammer.ai_shimmer.interfaces.ToolProvider
 import com.adamhammer.ai_shimmer.model.*
 import com.adamhammer.ai_shimmer.utils.toJsonString
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +27,8 @@ class Shimmer<T : Any>(
     private val adapter: ApiAdapter,
     private val contextBuilder: ContextBuilder,
     private val interceptors: List<Interceptor>,
-    private val resilience: ResiliencePolicy
+    private val resilience: ResiliencePolicy,
+    private val toolProviders: List<ToolProvider> = emptyList()
 ) : InvocationHandler {
 
     private val logger = Logger.getLogger(Shimmer::class.java.name)
@@ -70,6 +72,12 @@ class Shimmer<T : Any>(
                 val request = ShimmerRequest(method, args, instance._memory.toMap(), kClass)
                 var context = contextBuilder.build(request)
 
+                // Inject available tools from registered tool providers
+                if (toolProviders.isNotEmpty()) {
+                    val allTools = toolProviders.flatMap { it.listTools() }
+                    context = context.copy(availableTools = allTools)
+                }
+
                 for (interceptor in interceptors) {
                     context = interceptor.intercept(context)
                 }
@@ -108,6 +116,12 @@ class Shimmer<T : Any>(
             try {
                 val request = ShimmerRequest(method, realArgs, instance._memory.toMap(), resultClass)
                 var context = contextBuilder.build(request)
+
+                // Inject available tools from registered tool providers
+                if (toolProviders.isNotEmpty()) {
+                    val allTools = toolProviders.flatMap { it.listTools() }
+                    context = context.copy(availableTools = allTools)
+                }
 
                 for (interceptor in interceptors) {
                     context = interceptor.intercept(context)
@@ -167,9 +181,19 @@ class Shimmer<T : Any>(
 
     private fun <R : Any> executeWithTimeout(adapter: ApiAdapter, context: PromptContext, resultClass: KClass<R>): R {
         if (resilience.timeoutMs <= 0) {
-            return adapter.handleRequest(context, resultClass)
+            return if (toolProviders.isNotEmpty()) {
+                adapter.handleRequest(context, resultClass, toolProviders)
+            } else {
+                adapter.handleRequest(context, resultClass)
+            }
         }
-        val future = CompletableFuture.supplyAsync { adapter.handleRequest(context, resultClass) }
+        val future = CompletableFuture.supplyAsync {
+            if (toolProviders.isNotEmpty()) {
+                adapter.handleRequest(context, resultClass, toolProviders)
+            } else {
+                adapter.handleRequest(context, resultClass)
+            }
+        }
         try {
             return future.get(resilience.timeoutMs, TimeUnit.MILLISECONDS)
         } catch (e: TimeoutException) {

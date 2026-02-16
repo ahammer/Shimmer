@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 rootProject.name = 'shimmer'
-include 'shimmer-core', 'shimmer-test', 'shimmer-openai', 'samples-dnd'
+include 'shimmer-core', 'shimmer-test', 'shimmer-openai', 'shimmer-mcp', 'samples-dnd'

@@ -58,3 +58,24 @@ fun PromptContext.assertPropertyEquals(key: String, expected: Any): PromptContex
     }
     return this
 }
+
+fun PromptContext.assertHasTools(vararg names: String): PromptContext {
+    val toolNames = availableTools.map { it.name }
+    for (name in names) {
+        if (name !in toolNames) {
+            throw AssertionError(
+                "Expected available tools to contain \"$name\" but found: $toolNames"
+            )
+        }
+    }
+    return this
+}
+
+fun PromptContext.assertToolCount(expected: Int): PromptContext {
+    if (availableTools.size != expected) {
+        throw AssertionError(
+            "Expected $expected available tool(s) but found ${availableTools.size}: ${availableTools.map { it.name }}"
+        )
+    }
+    return this
+}

@@ -29,20 +29,23 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 - **Coroutine support** — `suspend` functions work natively alongside `Future<T>`
 - **Annotation metadata** — describe operations, parameters, and response schemas for the AI
 - **Adapter pattern** — swap AI providers without changing your interface (OpenAI included)
+- **Tool calling** — multi-turn LLM↔tool loops with pluggable `ToolProvider` abstraction
+- **MCP support** — consume MCP server tools and expose Shimmer interfaces as MCP servers
 - **Context control** — replace or intercept the prompt pipeline with `ContextBuilder` and `Interceptor`
 - **Resilience** — retry with exponential backoff, per-call timeouts, result validation, and fallback adapters
 - **Memory system** — persist results across calls with `@Memorize` for stateful conversations
 - **Type-safe responses** — get deserialized Kotlin objects back, not raw strings
 - **Agent patterns** — build multi-step and decision-making AI workflows
-- **Test-first** — `shimmer-test` module with `MockAdapter`, test helpers, and prompt assertions
+- **Test-first** — `shimmer-test` module with `MockAdapter`, `MockToolProvider`, test helpers, and prompt assertions
 
 ## Project Structure
 
 | Module | Description |
 |--------|-------------|
-| `shimmer-core` | Core library — annotations, proxy, context pipeline, resilience. Zero AI-provider dependencies. |
-| `shimmer-openai` | OpenAI adapter — sends `PromptContext` to OpenAI and deserializes responses. |
-| `shimmer-test` | Test utilities — `MockAdapter`, prompt assertions, test fixtures, `shimmerTest<T>()` / `shimmerStub<T>()` helpers. |
+| `shimmer-core` | Core library — annotations, proxy, context pipeline, tool-calling abstractions, resilience. Zero AI-provider dependencies. |
+| `shimmer-openai` | OpenAI adapter — sends `PromptContext` to OpenAI with native tool-calling support. |
+| `shimmer-mcp` | MCP integration — consume MCP server tools via `McpToolProvider`, expose Shimmer interfaces as MCP servers via `ShimmerMcpServer`. |
+| `shimmer-test` | Test utilities — `MockAdapter`, `MockToolProvider`, prompt assertions, test fixtures, `shimmerTest<T>()` / `shimmerStub<T>()` helpers. |
 | `samples-dnd` | Sample app — a text-based D&D adventure with the AI as Dungeon Master. |
 
 ## Installation
@@ -269,6 +272,26 @@ mock.lastContext!!
     .assertMemoryContains("key", "value")
     .assertMemoryEmpty()
     .assertPropertyEquals("key", expectedValue)
+    .assertHasTools("calculator", "search")
+    .assertToolCount(2)
+```
+
+### MockToolProvider
+
+```kotlin
+val mockTools = MockToolProvider.builder()
+    .tool("calculator", "Performs math", """{"type":"object","properties":{"expr":{"type":"string"}},"required":["expr"]}""")
+    .handler("calculator") { call -> ToolResult(call.id, call.toolName, "42") }
+    .build()
+
+val instance = shimmer<MyAPI> {
+    adapter(mock)
+    toolProvider(mockTools)
+}
+
+// After calls:
+mockTools.verifyCallCount(1)
+mockTools.lastCall  // most recent ToolCall
 ```
 
 ### Live Test Isolation
@@ -312,9 +335,130 @@ class MyAdapter : ApiAdapter {
         // context.methodInvocation   — JSON method + params + schema
         // context.memory             — accumulated memory map
         // context.properties         — custom data from interceptors
+        // context.availableTools     — tools from registered ToolProviders
+    }
+
+    // Override for multi-turn tool calling
+    override fun <R : Any> handleRequest(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): R {
+        // Implement LLM ↔ tool loop:
+        // 1. Send request with tool definitions
+        // 2. If LLM requests tool calls, dispatch via toolProviders
+        // 3. Feed results back, repeat until final response
     }
 }
 ```
+
+## Tool Calling
+
+Shimmer supports multi-turn tool calling as a first-class concept. Register `ToolProvider`s to make external tools available to the LLM during generation.
+
+### Using Tool Providers
+
+```kotlin
+val instance = shimmer<MyAPI> {
+    adapter(OpenAiAdapter())
+    toolProvider(myToolProvider)      // single provider
+    toolProviders(listOf(p1, p2))    // multiple providers
+}
+```
+
+When tool providers are registered, the OpenAI adapter automatically:
+1. Converts tool definitions to OpenAI's function-calling format
+2. Sends them with the chat completion request
+3. Dispatches tool calls to the appropriate provider
+4. Feeds results back to the LLM
+5. Repeats until the LLM produces a final response
+
+### Custom Tool Providers
+
+Implement the `ToolProvider` interface:
+
+```kotlin
+class MyToolProvider : ToolProvider {
+    override fun listTools(): List<ToolDefinition> = listOf(
+        ToolDefinition(
+            name = "calculator",
+            description = "Evaluates math expressions",
+            inputSchema = """{"type":"object","properties":{"expr":{"type":"string"}},"required":["expr"]}"""
+        )
+    )
+
+    override fun callTool(call: ToolCall): ToolResult {
+        val expr = Json.parseToJsonElement(call.arguments).jsonObject["expr"]?.jsonPrimitive?.content
+        val result = evaluate(expr)
+        return ToolResult(call.id, call.toolName, result.toString())
+    }
+}
+```
+
+## MCP Support
+
+The `shimmer-mcp` module provides full [Model Context Protocol](https://modelcontextprotocol.io/) integration — both as a client (consuming tools from MCP servers) and as a server (exposing Shimmer interfaces as MCP tools).
+
+### Dependencies
+
+```groovy
+dependencies {
+    implementation project(':shimmer-mcp')
+}
+```
+
+### MCP Client — Consuming MCP Server Tools
+
+Use `McpToolProvider` to connect to an MCP server and make its tools available to the LLM:
+
+```kotlin
+// Connect to an MCP server via stdio
+val transport = StdioClientTransport(
+    ServerParameters.builder("npx")
+        .args("-y", "@modelcontextprotocol/server-everything")
+        .build()
+)
+
+val mcpTools = McpToolProvider(transport)
+mcpTools.connect()
+
+// Wire MCP tools into Shimmer
+val instance = shimmer<MyAPI> {
+    adapter(OpenAiAdapter())
+    toolProvider(mcpTools)
+}
+
+// The LLM can now call MCP tools during generation
+val result = instance.api.doSomething().get()
+
+// Clean up
+mcpTools.close()
+```
+
+### MCP Server — Exposing Shimmer Interfaces
+
+Use `ShimmerMcpServer` to expose annotated Kotlin interfaces as MCP tools:
+
+```kotlin
+// Your implementation of the annotated interface
+class MyApiImpl : MyApi {
+    override fun echo(message: String): Future<EchoResult> {
+        return CompletableFuture.completedFuture(EchoResult(message))
+    }
+}
+
+// Expose as an MCP server
+val server = ShimmerMcpServer.builder()
+    .transportProvider(StdioServerTransportProvider(objectMapper))
+    .expose(MyApiImpl(), MyApi::class)
+    .serverInfo("my-server", "1.0.0")
+    .build()
+
+// The server is now running — external MCP clients (Claude Desktop, etc.)
+// can discover and call your tools
+```
+
+Shimmer automatically generates MCP tool definitions from your `@AiOperation`, `@AiParameter`, and `@AiSchema` annotations.
 
 ## API Reference
 
@@ -332,7 +476,8 @@ class MyAdapter : ApiAdapter {
 
 | Interface | Purpose |
 |-----------|---------|
-| `ApiAdapter` | Sends a `PromptContext` to an AI provider and returns a deserialized result |
+| `ApiAdapter` | Sends a `PromptContext` to an AI provider and returns a deserialized result. Supports multi-turn tool calling. |
+| `ToolProvider` | Provides tools for LLM tool-calling loops — implemented by `McpToolProvider`, `MockToolProvider`, etc. |
 | `ContextBuilder` | Builds a `PromptContext` from a `ShimmerRequest` — replace to control prompt assembly |
 | `Interceptor` | Transforms a `PromptContext` before it reaches the adapter — runs in registration order |
 
@@ -340,9 +485,11 @@ class MyAdapter : ApiAdapter {
 
 | Adapter | Module | Purpose |
 |---------|--------|---------|
-| `OpenAiAdapter` | `shimmer-openai` | OpenAI API (configurable model, defaults to GPT-4o-mini) |
+| `OpenAiAdapter` | `shimmer-openai` | OpenAI API with native tool-calling support (configurable model, defaults to GPT-4o-mini) |
 | `StubAdapter` | `shimmer-core` | Returns default-constructed instances for testing |
 | `MockAdapter` | `shimmer-test` | Configurable test adapter with scripted/dynamic responses and prompt capture |
+| `McpToolProvider` | `shimmer-mcp` | Discovers and invokes tools from MCP servers |
+| `MockToolProvider` | `shimmer-test` | Configurable test tool provider with scripted handlers and call capture |
 
 ### Exception Types
 
@@ -358,9 +505,12 @@ class MyAdapter : ApiAdapter {
 
 | Class | Purpose |
 |-------|---------|
-| `PromptContext` | Assembled context for an AI call (system instructions, method invocation, memory, properties) |
+| `PromptContext` | Assembled context for an AI call (system instructions, method invocation, memory, properties, available tools) |
 | `ShimmerRequest` | Raw request data from a proxy method invocation |
 | `ResiliencePolicy` | Configures retry, timeout, validation, and fallback behavior |
+| `ToolDefinition` | Provider-agnostic tool description (name, description, input/output schema) |
+| `ToolCall` | LLM's request to invoke a tool (id, tool name, arguments) |
+| `ToolResult` | Result of a tool invocation fed back to the LLM |
 
 ## License
 

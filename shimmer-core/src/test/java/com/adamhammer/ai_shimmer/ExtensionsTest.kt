@@ -184,4 +184,48 @@ class ExtensionsTest {
         val jsonStr = SimpleTestAPI::class.toJsonClassMetadataString()
         assertDoesNotThrow { Json.parseToJsonElement(jsonStr) }
     }
+
+    // ── toToolDefinition / toToolDefinitions ──────────────────────────────
+
+    @Test
+    fun `toToolDefinition produces correct name and description`() {
+        val method = InvocationTestAPI::class.java.getMethod("doSomething", String::class.java)
+        val toolDef = method.toToolDefinition()
+        assertEquals("doSomething", toolDef.name)
+        assertEquals("Does something", toolDef.description)
+    }
+
+    @Test
+    fun `toToolDefinition inputSchema is valid JSON with properties`() {
+        val method = InvocationTestAPI::class.java.getMethod("doSomething", String::class.java)
+        val toolDef = method.toToolDefinition()
+        val schema = Json.parseToJsonElement(toolDef.inputSchema).jsonObject
+        assertEquals("object", schema["type"]?.jsonPrimitive?.content)
+        assertNotNull(schema["properties"])
+        assertNotNull(schema["required"])
+    }
+
+    @Test
+    fun `toToolDefinition includes outputSchema`() {
+        val method = InvocationTestAPI::class.java.getMethod("doSomething", String::class.java)
+        val toolDef = method.toToolDefinition()
+        assertNotNull(toolDef.outputSchema)
+        assertDoesNotThrow { Json.parseToJsonElement(toolDef.outputSchema!!) }
+    }
+
+    @Test
+    fun `toToolDefinitions returns definitions for all annotated methods`() {
+        val toolDefs = InvocationTestAPI::class.toToolDefinitions()
+        assertEquals(2, toolDefs.size)
+        assertTrue(toolDefs.any { it.name == "doSomething" })
+        assertTrue(toolDefs.any { it.name == "noArgs" })
+    }
+
+    @Test
+    fun `toToolDefinition uses summary when description is blank`() {
+        val method = InvocationTestAPI::class.java.getMethod("noArgs")
+        val toolDef = method.toToolDefinition()
+        // noArgs has description="No arguments", so it should use that
+        assertEquals("No arguments", toolDef.description)
+    }
 }

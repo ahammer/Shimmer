@@ -9,5 +9,6 @@ data class PromptContext(
     val systemInstructions: String,
     val methodInvocation: String,
     val memory: Map<String, String>,
-    val properties: Map<String, Any> = emptyMap()
+    val properties: Map<String, Any> = emptyMap(),
+    val availableTools: List<ToolDefinition> = emptyList()
 )
