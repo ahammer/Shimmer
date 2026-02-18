@@ -231,3 +231,110 @@ fun KClass<*>.toToolDefinitions(): List<ToolDefinition> {
         .filter { it.isAnnotationPresent(AiOperation::class.java) }
         .map { it.toToolDefinition() }
 }
+
+/**
+ * Generates a proper JSON Schema object from a Kotlin class.
+ *
+ * Unlike [toJsonStructure] which produces example JSON payloads for prompt engineering,
+ * this produces a valid JSON Schema (compatible with OpenAI's structured output
+ * `response_format: json_schema`) with `type`, `properties`, `required`, and
+ * `additionalProperties` fields.
+ *
+ * Supports: primitives, enums, `List<T>`, `Map<String, T>`, and nested data classes.
+ * Pulls `description` from [AiSchema] annotations when available.
+ */
+fun KClass<*>.toJsonSchema(): JsonObject = when {
+    this == String::class -> buildJsonObject { put("type", "string") }
+    this == Int::class || this == Long::class -> buildJsonObject { put("type", "integer") }
+    this == Double::class || this == Float::class -> buildJsonObject { put("type", "number") }
+    this == Boolean::class -> buildJsonObject { put("type", "boolean") }
+    java.isEnum -> buildJsonObject {
+        put("type", "string")
+        put("enum", JsonArray(java.enumConstants.map { JsonPrimitive(it.toString()) }))
+    }
+    else -> buildJsonObject {
+        put("type", "object")
+        val classAnnotation = findAnnotation<AiSchema>()
+        if (classAnnotation?.description?.isNotBlank() == true) {
+            put("description", classAnnotation.description)
+        }
+        val props = buildJsonObject {
+            declaredMemberProperties.forEach { prop ->
+                val propType = prop.returnType.classifier as? KClass<*>
+                val schemaDesc = resolvePropertyDescription(prop, classAnnotation)
+                val propSchema = buildPropertySchema(propType, prop, schemaDesc)
+                put(prop.name, propSchema)
+            }
+        }
+        put("properties", props)
+        put("required", JsonArray(declaredMemberProperties.map { JsonPrimitive(it.name) }))
+        put("additionalProperties", JsonPrimitive(false))
+    }
+}
+
+private fun KClass<*>.resolvePropertyDescription(
+    prop: kotlin.reflect.KProperty1<*, *>,
+    classAnnotation: AiSchema?
+): String? {
+    val javaField = try {
+        java.getDeclaredField(prop.name)
+    } catch (_: NoSuchFieldException) {
+        null
+    }
+    val fieldAnnotation = javaField?.getAnnotation(AiSchema::class.java)
+    return when {
+        fieldAnnotation?.description?.isNotBlank() == true -> fieldAnnotation.description
+        fieldAnnotation?.title?.isNotBlank() == true -> fieldAnnotation.title
+        prop.findAnnotation<AiSchema>()?.description?.isNotBlank() == true ->
+            prop.findAnnotation<AiSchema>()!!.description
+        prop.findAnnotation<AiSchema>()?.title?.isNotBlank() == true ->
+            prop.findAnnotation<AiSchema>()!!.title
+        classAnnotation?.description?.isNotBlank() == true ->
+            "${classAnnotation.description} - ${prop.name}"
+        else -> null
+    }
+}
+
+private fun buildPropertySchema(
+    propType: KClass<*>?,
+    prop: kotlin.reflect.KProperty1<*, *>,
+    description: String?
+): JsonObject = buildJsonObject {
+    when {
+        propType == String::class -> put("type", "string")
+        propType == Int::class || propType == Long::class -> put("type", "integer")
+        propType == Double::class || propType == Float::class -> put("type", "number")
+        propType == Boolean::class -> put("type", "boolean")
+        propType?.java?.isEnum == true -> {
+            put("type", "string")
+            put("enum", JsonArray(propType.java.enumConstants.map { JsonPrimitive(it.toString()) }))
+        }
+        propType == List::class || propType == Set::class -> {
+            put("type", "array")
+            val elementType = prop.returnType.arguments.firstOrNull()
+                ?.type?.classifier as? KClass<*>
+            if (elementType != null) {
+                put("items", elementType.toJsonSchema())
+            }
+        }
+        propType == Map::class -> {
+            put("type", "object")
+            put("additionalProperties", JsonPrimitive(true))
+        }
+        propType != null -> {
+            // Nested data class — recurse
+            val nested = propType.toJsonSchema()
+            nested.forEach { (k, v) -> put(k, v) }
+            return@buildJsonObject // already added all fields inline
+        }
+        else -> put("type", "string")
+    }
+    if (description != null) {
+        put("description", description)
+    }
+}
+
+/**
+ * Returns the JSON Schema as a JSON string.
+ */
+fun KClass<*>.toJsonSchemaString(): String = json.encodeToString(toJsonSchema())

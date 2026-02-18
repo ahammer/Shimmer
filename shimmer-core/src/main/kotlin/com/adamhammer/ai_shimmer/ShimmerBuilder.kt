@@ -15,11 +15,18 @@ import kotlin.reflect.KClass
 
 class ShimmerInstance<T : Any>(
     val api: T,
-    @JvmField val _memory: MutableMap<String, String>,
+    private val _memory: MutableMap<String, String>,
     val klass: KClass<T>
 ) {
     /** Read-only view of the current memory map. */
     val memory: Map<String, String> get() = _memory.toMap()
+
+    /**
+     * Returns the mutable memory backing this instance.
+     * Intended for intra-library use only (e.g., agent dispatchers that need
+     * to share memory across multiple [ShimmerInstance]s).
+     */
+    fun writableMemory(): MutableMap<String, String> = _memory
 }
 
 @DslMarker

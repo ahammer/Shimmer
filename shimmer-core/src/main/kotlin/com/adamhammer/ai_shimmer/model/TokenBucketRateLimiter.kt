@@ -21,14 +21,15 @@ class TokenBucketRateLimiter(
             }
             if (timestamps.size < maxPerMinute) {
                 timestamps.addLast(now)
-                @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-                (this as java.lang.Object).notifyAll()
                 return
             }
-            // Wait until the oldest token expires
+            // Wait until the oldest token expires, then notify other waiters
             val waitMs = windowMs - (now - timestamps.first()) + 1
             @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
             (this as java.lang.Object).wait(waitMs)
+            // After waking, notify other blocked threads so they can re-check
+            @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+            (this as java.lang.Object).notifyAll()
         }
     }
 }

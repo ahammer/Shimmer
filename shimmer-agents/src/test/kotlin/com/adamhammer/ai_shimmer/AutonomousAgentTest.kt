@@ -17,11 +17,11 @@ class AutonomousAgentTest {
             .build().api
 
         val apiMock = MockAdapter.scripted(*apiResponses.toTypedArray())
-        val api = ShimmerBuilder(AutonomousAIApi::class)
+        val apiInstance = ShimmerBuilder(AutonomousAIApi::class)
             .setAdapterDirect(apiMock)
-            .build().api
+            .build()
 
-        return AutonomousAgent(api, decider)
+        return AutonomousAgent(apiInstance, decider)
     }
 
     @Test
@@ -118,11 +118,11 @@ class AutonomousAgentTest {
             .build().api
 
         val apiMock = MockAdapter.scripted(*responses.toTypedArray())
-        val api = ShimmerBuilder(AutonomousAIApi::class)
+        val apiInstance = ShimmerBuilder(AutonomousAIApi::class)
             .setAdapterDirect(apiMock)
-            .build().api
+            .build()
 
-        val agent = AutonomousAgent(api, decider)
+        val agent = AutonomousAgent(apiInstance, decider)
 
         assertEquals("understood", agent.step())
         assertEquals("analyzed", agent.step())

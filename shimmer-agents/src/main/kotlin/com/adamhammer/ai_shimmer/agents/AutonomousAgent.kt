@@ -46,12 +46,10 @@ class AutonomousAgent(
 ) {
     private val dispatcher = AgentDispatcher(apiInstance)
 
-    /** Secondary constructor for backward compatibility when memory forwarding is not needed. */
-    constructor(api: AutonomousAIApi, decider: DecidingAgentAPI) :
-        this(ShimmerInstance(api, java.util.concurrent.ConcurrentHashMap(), AutonomousAIApi::class), decider)
-
     fun step(): String {
-        val decision = decider.decide(ShimmerInstance(apiInstance.api, apiInstance._memory, AutonomousAIApi::class)).get()
+        val decision = decider.decide(
+            ShimmerInstance(apiInstance.api, apiInstance.writableMemory(), AutonomousAIApi::class)
+        ).get()
         val result = dispatcher.dispatch(decision)
         return result?.toString() ?: ""
     }

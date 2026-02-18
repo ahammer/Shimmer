@@ -8,7 +8,7 @@ complexity:
     functionThreshold: 8
     constructorThreshold: 10
   CyclomaticComplexMethod:
-    threshold: 22
+    threshold: 15
   TooManyFunctions:
     thresholdInFiles: 20
     thresholdInClasses: 20
@@ -49,7 +49,9 @@ naming:
 exceptions:
   TooGenericExceptionCaught:
     active: false
+    excludes: ['**/adapters/**', '**/mcp/**']
   TooGenericExceptionThrown:
     excludes: ['**/test/**']
   SwallowedException:
-    active: false
+    active: true
+    excludes: ['**/test/**']
