@@ -37,7 +37,7 @@ performance:
 
 naming:
   PackageNaming:
-    active: false
+    active: true
   ConstructorParameterNaming:
     parameterPattern: '_?[a-z][A-Za-z0-9]*'
   FunctionNaming:
