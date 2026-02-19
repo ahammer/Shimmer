@@ -8,6 +8,10 @@ application {
     mainClass = 'com.adamhammer.shimmer.samples.dnd.MainKt'
 }
 
+run {
+    standardInput = System.in
+}
+
 dependencies {
     implementation project(':shimmer-core')
     implementation project(':shimmer-openai')
