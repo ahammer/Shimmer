@@ -48,15 +48,19 @@ suspend fun <T : Any> DecidingAgentAPI.decideSuspend(shimmerInstance: ShimmerIns
 interface DecidingAgentAPI {
     @AiOperation(
         summary = "Decide Next Action",
-        description = "Introspects the provided object to build a decision schema" +
-            " and then determines the next action based on its capabilities."
+        description = "Examine the available methods listed in the provided schema and choose " +
+            "which one to call next, along with its arguments. " +
+            "IMPORTANT: The 'method' field in your response MUST be one of the method names " +
+            "from the schema in 'currentObject' (e.g. 'observeSituation', 'decideAction'). " +
+            "Do NOT return 'decideNextAction' — that is this method, not a valid choice."
     )
     @AiResponse(
-        description = "A decision about the next action, based on the options and available input.",
+        description = "A decision selecting one of the methods from the provided schema, with arguments.",
         responseClass = AiDecision::class
     )
     fun decideNextAction(
-        @AiParameter(description = "The current state and available options")
+        @AiParameter(description = "JSON schema of the target API's available methods. " +
+            "Pick one of these method names for the 'method' field in your response.")
         currentObject: String
     ): Future<AiDecision>
 }

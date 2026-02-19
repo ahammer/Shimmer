@@ -42,6 +42,9 @@ class CharacterInterceptor(private val characterProvider: () -> Character) : Int
                 |- Use your class abilities and skills when appropriate.
                 |- Be specific about what you do — don't be vague.
                 |- Consider your inventory and equipment in your decisions.
+                |- NEVER repeat the same action two rounds in a row.
+                |- React to what changed since your last action.
+                |- Explore, interact with NPCs, investigate, or fight — vary your approach.
                 |Status: ${c.status}
             """.trimMargin()
         )

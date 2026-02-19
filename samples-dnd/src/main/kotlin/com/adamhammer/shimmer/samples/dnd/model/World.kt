@@ -84,7 +84,9 @@ data class World(
     @field:AiSchema(description = "The current round number")
     val round: Int = 0,
     @field:AiSchema(description = "Active quests and objectives")
-    val questLog: List<String> = emptyList()
+    val questLog: List<String> = emptyList(),
+    @field:AiSchema(description = "Log of recent actions and events (most recent last)")
+    val actionLog: List<String> = emptyList()
 )
 
 // ── AI Response Types ───────────────────────────────────────────────────────
@@ -92,6 +94,11 @@ data class World(
 @Serializable
 @AiSchema(title = "SceneDescription", description = "A vivid description of the current scene")
 data class SceneDescription(
+    @field:AiSchema(
+        description = "A small ASCII art illustration of the scene (3-6 lines, " +
+            "using box-drawing and simple characters). Evocative, not detailed."
+    )
+    val asciiArt: String = "",
     @field:AiSchema(description = "An atmospheric description of what the party sees, hears, and smells")
     val narrative: String = "",
     @field:AiSchema(description = "Suggested actions the party could take")
@@ -146,6 +153,17 @@ data class ActionResult(
 )
 
 @Serializable
+@AiSchema(title = "CharacterConcept", description = "A randomly generated character concept for a D&D adventure")
+data class CharacterConcept(
+    @field:AiSchema(description = "A creative, memorable character name fitting the race and setting")
+    val name: String = "",
+    @field:AiSchema(description = "The character's race (e.g. Human, Elf, Dwarf, Halfling, Gnome, Tiefling, Dragonborn, Half-Orc)")
+    val race: String = "",
+    @field:AiSchema(description = "The character's class (e.g. Fighter, Wizard, Rogue, Cleric, Ranger, Bard, Paladin, Warlock)")
+    val characterClass: String = ""
+)
+
+@Serializable
 @AiSchema(title = "BackstoryResult", description = "An AI-generated backstory with suggested stats for a character")
 data class BackstoryResult(
     @field:AiSchema(description = "A rich 2-3 paragraph backstory for the character")
@@ -159,7 +177,10 @@ data class BackstoryResult(
 @Serializable
 @AiSchema(title = "PlayerAction", description = "An AI-controlled character's chosen action")
 data class PlayerAction(
-    @field:AiSchema(description = "The action the character wants to take, described in first person")
+    @field:AiSchema(
+        description = "A short, specific player command in first person " +
+            "(1-2 sentences max, e.g. 'I attack the goblin'). NOT narration or scene description."
+    )
     val action: String = "",
     @field:AiSchema(description = "Brief internal reasoning for why this action was chosen")
     val reasoning: String = ""

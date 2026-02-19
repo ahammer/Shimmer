@@ -47,7 +47,7 @@ private fun createParty(scanner: Scanner): World {
     val party = mutableListOf<Character>()
 
     for (i in 1..partySize) {
-        val character = createCharacter(scanner, i, partySize, backstoryDm)
+        val character = createCharacter(scanner, i, partySize, backstoryDm, party)
         party.add(character)
         println()
         println(CharacterUtils.formatStats(character))
@@ -61,28 +61,55 @@ private fun createCharacter(
     scanner: Scanner,
     index: Int,
     total: Int,
-    backstoryDm: DungeonMasterAPI
+    backstoryDm: DungeonMasterAPI,
+    existingParty: List<Character> = emptyList()
 ): Character {
     println("─── Character $index of $total ────────────────────────")
+    println("  (Leave any field blank to auto-generate)")
 
     print("  Name: ")
-    val name = scanner.nextLine().ifBlank { "Hero$index" }
+    val inputName = scanner.nextLine().trim()
 
-    print("  Race (Human/Elf/Dwarf/Halfling): ")
-    val race = scanner.nextLine().ifBlank { "Human" }
+    print("  Race (Human/Elf/Dwarf/Halfling/...): ")
+    val inputRace = scanner.nextLine().trim()
 
-    print("  Class (Fighter/Wizard/Rogue/Cleric): ")
-    val characterClass = scanner.nextLine().ifBlank { "Fighter" }
+    print("  Class (Fighter/Wizard/Rogue/Cleric/...): ")
+    val inputClass = scanner.nextLine().trim()
+
+    val (name, race, characterClass) = if (
+        inputName.isBlank() || inputRace.isBlank() || inputClass.isBlank()
+    ) {
+        val existingMembers = existingParty.joinToString(", ") {
+            "${it.name} the ${it.race} ${it.characterClass}"
+        }.ifEmpty { "none yet" }
+        val hints = buildString {
+            if (inputName.isNotBlank()) append("name=$inputName ")
+            if (inputRace.isNotBlank()) append("race=$inputRace ")
+            if (inputClass.isNotBlank()) append("class=$inputClass")
+        }.trim()
+        val prompt = "EXISTING PARTY: [$existingMembers]. " +
+            "GENERATE: ${if (hints.isBlank()) "name, race, class" else hints}. " +
+            "HINT: ${hints.ifBlank { "surprise me" }}"
+        println("  Generating character concept...")
+        val concept = backstoryDm.generateCharacterConcept(prompt).get()
+        val n = inputName.ifBlank { concept.name }.ifBlank { "Hero$index" }
+        val r = inputRace.ifBlank { concept.race }.ifBlank { "Human" }
+        val c = inputClass.ifBlank { concept.characterClass }.ifBlank { "Fighter" }
+        println("  → $n the $r $c")
+        Triple(n, r, c)
+    } else {
+        Triple(inputName, inputRace, inputClass)
+    }
 
     print("  Controlled by (h)uman or (a)i? [h]: ")
     val isHuman = !scanner.nextLine().trim().lowercase().startsWith("a")
 
-    val (backstory, abilityScores) = resolveBackstoryAndStats(
+    val (backstory, abilityScores, startingItems) = resolveBackstoryAndStats(
         scanner, backstoryDm, name, race, characterClass, isHuman
     )
 
     return CharacterUtils.buildCharacter(
-        name, race, characterClass, abilityScores, backstory, isHuman
+        name, race, characterClass, abilityScores, backstory, isHuman, startingItems
     )
 }
 
@@ -93,28 +120,28 @@ private fun resolveBackstoryAndStats(
     race: String,
     characterClass: String,
     isHuman: Boolean
-): Pair<String, AbilityScores> {
+): Triple<String, AbilityScores, List<String>> {
     if (!isHuman) {
         println("  Generating backstory for AI companion $name...")
         val result = backstoryDm
             .generateBackstory(name, race, characterClass).get()
         println("  ${result.backstory.take(200)}...")
         println()
-        return result.backstory to result.suggestedAbilityScores
+        return Triple(result.backstory, result.suggestedAbilityScores, result.startingItems)
     }
 
     println("  Write a backstory (or Enter for AI-generated):")
     print("  > ")
     val typed = scanner.nextLine().trim()
     if (typed.isNotBlank()) {
-        return typed to assignAbilityScores(scanner, characterClass)
+        return Triple(typed, assignAbilityScores(scanner, characterClass), emptyList())
     }
     println("  Generating backstory for $name the $race $characterClass...")
     val result = backstoryDm
         .generateBackstory(name, race, characterClass).get()
     println("  ${result.backstory.take(200)}...")
     println()
-    return result.backstory to assignAbilityScores(scanner, characterClass)
+    return Triple(result.backstory, assignAbilityScores(scanner, characterClass), result.startingItems)
 }
 
 // ── Game Loop ───────────────────────────────────────────────────────────────
@@ -194,6 +221,11 @@ private fun processRound(
         )
 
         world = applyResult(world, finalResult, character.name)
+        val logEntry = "Round ${world.round}: ${character.name} — $action → " +
+            if (finalResult.success) "success" else "failure"
+        world = world.copy(
+            actionLog = (world.actionLog + logEntry).takeLast(20)
+        )
         printActionResult(finalResult, world)
     }
     return world
@@ -219,11 +251,14 @@ private fun resolveAiAction(
     println("\n  🤖 ${character.name} is thinking...")
     val agent = aiAgents[character.name]
     if (agent != null) {
-        agent.step()
-        val decisionResult = agent.step()
-        val action = parseAiAction(decisionResult, character.name)
-        println("  🤖 ${character.name}: \"$action\"")
-        return action
+        try {
+            val decisionResult = agent.step()
+            val action = parseAiAction(decisionResult, character.name)
+            println("  🤖 ${character.name}: \"$action\"")
+            return action
+        } catch (e: Exception) {
+            println("  ⚠ ${character.name}'s AI stumbled: ${e.message}")
+        }
     }
     val fallback = "I look around cautiously."
     println("  🤖 ${character.name}: \"$fallback\"")
@@ -293,12 +328,16 @@ private fun handleDiceRoll(
             " = $total vs DC ${roll.difficulty} → $outcome"
     )
 
+    val success = total >= roll.difficulty
+
     return dm.resolveRoll(
         roll.characterName,
         roll.rollType,
         diceValue,
         roll.modifier,
-        roll.difficulty
+        roll.difficulty,
+        total,
+        success
     ).get()
 }
 
@@ -432,6 +471,10 @@ private fun applyResult(
 private fun printScene(scene: SceneDescription, world: World) {
     println()
     println("═══ ${world.location.name} ═══")
+    if (scene.asciiArt.isNotBlank()) {
+        println(scene.asciiArt)
+        println()
+    }
     println(scene.narrative)
     if (scene.availableActions.isNotEmpty()) {
         println()
@@ -472,6 +515,10 @@ private fun printRoundSummary(
     world: World
 ) {
     println("─── End of Round ${world.round} ─────────────────────")
+    if (summary.asciiArt.isNotBlank()) {
+        println(summary.asciiArt)
+        println()
+    }
     println(summary.narrative)
     if (summary.availableActions.isNotEmpty()) {
         val actions = summary.availableActions.joinToString(" | ")
@@ -498,9 +545,16 @@ private fun parseAiAction(
     stepResult: String,
     characterName: String
 ): String {
-    val pattern = Regex(""""action"\s*:\s*"([^"]+)"""")
-    val match = pattern.find(stepResult)
-    return match?.groupValues?.get(1) ?: stepResult.take(200).ifBlank {
+    // Try JSON format: "action": "..."
+    val jsonPattern = Regex(""""action"\s*:\s*"([^"]+)"""")
+    jsonPattern.find(stepResult)?.groupValues?.get(1)?.let { return it }
+
+    // Try Kotlin toString format: PlayerAction(action=..., reasoning=...)
+    val toStringPattern = Regex("""action=([^,)]+)""")
+    toStringPattern.find(stepResult)?.groupValues?.get(1)
+        ?.trim()?.let { return it }
+
+    return stepResult.take(200).ifBlank {
         "$characterName looks around cautiously."
     }
 }

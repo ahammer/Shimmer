@@ -25,6 +25,15 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
                 |Use the world state below to inform all your responses.
                 |Do not contradict the established world state.
                 |
+                |## DM Philosophy
+                |- You are an EXCELLENT Dungeon Master. Your job is to make the game ENGAGING.
+                |- Drive the plot forward every round. Introduce new NPCs, threats, mysteries, and twists.
+                |- If players repeat the same action, the world REACTS — crowds get bored, enemies attack,
+                |  the environment changes, or something unexpected interrupts them.
+                |- NEVER repeat a previous scene description. Each round should feel different.
+                |- Build a coherent story arc with rising tension, climax, and resolution.
+                |- Use the action log below to track what has happened and avoid repetition.
+                |
                 |## Party Rules
                 |- Address characters by name when narrating their actions.
                 |- Consider each character's ability scores, class, skills, and proficiencies.

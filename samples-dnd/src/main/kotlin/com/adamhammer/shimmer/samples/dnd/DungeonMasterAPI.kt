@@ -3,6 +3,7 @@ package com.adamhammer.shimmer.samples.dnd
 import com.adamhammer.shimmer.annotations.*
 import com.adamhammer.shimmer.samples.dnd.model.ActionResult
 import com.adamhammer.shimmer.samples.dnd.model.BackstoryResult
+import com.adamhammer.shimmer.samples.dnd.model.CharacterConcept
 import com.adamhammer.shimmer.samples.dnd.model.SceneDescription
 import java.util.concurrent.Future
 
@@ -16,10 +17,12 @@ interface DungeonMasterAPI {
         summary = "Describe Scene",
         description = "Describe the current scene to the adventuring party. Be vivid and atmospheric. " +
                 "Include sensory details — sights, sounds, smells. Address the party as a group. " +
-                "Suggest possible actions for the party members."
+                "Suggest possible actions for the party members. " +
+                "Include a small ASCII art illustration (3-6 lines) of the scene. " +
+                "NEVER repeat a previous scene description — always advance the narrative."
     )
     @AiResponse(
-        description = "A vivid scene description with suggested actions for the party",
+        description = "A vivid scene description with ASCII art and suggested actions",
         responseClass = SceneDescription::class
     )
     @Memorize(label = "Last scene description")
@@ -53,11 +56,12 @@ interface DungeonMasterAPI {
 
     @AiOperation(
         summary = "Resolve Dice Roll",
-        description = "A dice roll has been made. Narrate the outcome based on whether the total " +
-                "(roll + modifier) meets or exceeds the difficulty class. " +
+        description = "A dice roll has been made. The 'success' parameter tells you definitively " +
+                "whether the roll succeeded — you MUST narrate a success if success=true and " +
+                "a failure if success=false. Do NOT contradict the success/failure outcome. " +
                 "Be dramatic — describe near-misses, critical successes (natural 20), " +
                 "and critical failures (natural 1) with extra flair. " +
-                "Apply appropriate consequences based on success or failure."
+                "Apply appropriate consequences based on the outcome."
     )
     @AiResponse(
         description = "The narrative outcome of the dice roll with state changes",
@@ -74,8 +78,34 @@ interface DungeonMasterAPI {
         @AiParameter(description = "The ability modifier added to the roll")
         modifier: Int,
         @AiParameter(description = "The Difficulty Class to beat")
-        difficulty: Int
+        difficulty: Int,
+        @AiParameter(description = "The total of rollValue + modifier")
+        total: Int,
+        @AiParameter(description = "Whether the roll succeeded (total >= difficulty)")
+        success: Boolean
     ): Future<ActionResult>
+
+    @AiOperation(
+        summary = "Generate Character Concept",
+        description = "Generate a creative and interesting character concept for a D&D adventure. " +
+                "Choose an evocative name, an interesting race, and a fitting class. " +
+                "Be creative — go beyond the standard choices. Make each character unique and memorable. " +
+                "IMPORTANT: The concept MUST be different from existing party members. " +
+                "Avoid duplicate names, races, and classes to create a balanced, diverse party. " +
+                "If a partial concept is provided (e.g. just a name, or just a race), " +
+                "fill in only the missing fields while keeping the provided ones."
+    )
+    @AiResponse(
+        description = "A character concept with name, race, and class — different from existing party members",
+        responseClass = CharacterConcept::class
+    )
+    fun generateCharacterConcept(
+        @AiParameter(
+            description = "Partial concept hint and party context. " +
+                "Format: 'EXISTING PARTY: [list]. GENERATE: [fields needed]. HINT: [user input]'"
+        )
+        hint: String
+    ): Future<CharacterConcept>
 
     @AiOperation(
         summary = "Generate Character Backstory",
@@ -103,10 +133,17 @@ interface DungeonMasterAPI {
         description = "All party members have acted this round. Summarize what happened, " +
                 "describe how the environment reacts to the party's collective actions, " +
                 "and set the stage for the next round. Mention each character by name. " +
-                "Build tension, advance the story, and hint at what lies ahead."
+                "Build tension, advance the story, and hint at what lies ahead. " +
+                "Include a small ASCII art illustration (3-6 lines) of the evolving scene. " +
+                "CRITICAL: You are a great DM. Advance the PLOT every round. " +
+                "Introduce new NPCs, threats, discoveries, or twists. " +
+                "If players are repeating the same actions, the world should react — " +
+                "interrupt with events, encounters, or consequences. " +
+                "A good DM never lets the story stagnate. " +
+                "NEVER repeat previous scene descriptions verbatim."
     )
     @AiResponse(
-        description = "A summary of the round and setup for the next one",
+        description = "A summary advancing the plot, with ASCII art and new suggested actions",
         responseClass = SceneDescription::class
     )
     @Memorize(label = "Last round summary")

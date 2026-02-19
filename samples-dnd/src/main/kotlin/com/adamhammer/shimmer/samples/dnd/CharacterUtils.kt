@@ -66,11 +66,18 @@ object CharacterUtils {
         characterClass: String,
         abilityScores: AbilityScores,
         backstory: String,
-        isHuman: Boolean
+        isHuman: Boolean,
+        aiSuggestedItems: List<String> = emptyList()
     ): Character {
         val conMod = abilityModifier(abilityScores.con)
         val dexMod = abilityModifier(abilityScores.dex)
         val hp = startingHp(characterClass, conMod)
+        val isKnownClass = characterClass.lowercase() in listOf("fighter", "wizard", "rogue", "cleric")
+        val items = if (!isKnownClass && aiSuggestedItems.isNotEmpty()) {
+            aiSuggestedItems
+        } else {
+            classStartingItems(characterClass)
+        }
         return Character(
             name = name,
             race = race,
@@ -83,7 +90,7 @@ object CharacterUtils {
             proficiencyBonus = 2,
             savingThrows = classSavingThrows(characterClass),
             skills = classSkills(characterClass),
-            inventory = classStartingItems(characterClass),
+            inventory = items,
             status = "healthy",
             backstory = backstory,
             isHuman = isHuman
