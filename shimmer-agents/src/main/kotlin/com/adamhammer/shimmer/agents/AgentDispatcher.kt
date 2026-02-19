@@ -38,7 +38,7 @@ class AgentDispatcher<T : Any>(
                 "Unknown method '${decision.method}'. Available: ${methodMap.keys}"
             )
 
-        val args = resolveArguments(method, decision.args)
+        val args = resolveArguments(method, decision.argsMap())
         val result = if (args.isEmpty()) {
             method.invoke(shimmerInstance.api)
         } else {

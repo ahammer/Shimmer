@@ -13,13 +13,29 @@ import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.AiParameter
 
 @Serializable
+@AiSchema(title = "AI Argument", description = "A single named argument")
+data class AiArg(
+    @field:AiSchema(description = "The name of the argument")
+    val name: String,
+    @field:AiSchema(description = "The value of the argument")
+    val value: String
+)
+
+@Serializable
 @AiSchema(title = "AI Decision", description = "Look at the current state and options and decide what to do next")
 data class AiDecision(
     @field:AiSchema(description = "The method to call with the arguments")
     val method: String,
     @field:AiSchema(description = "The arguments to pass to this call.")
-    val args: Map<String, String>
-)
+    val args: List<AiArg>
+) {
+    constructor(method: String, argsMap: Map<String, String>) : this(
+        method,
+        argsMap.map { (k, v) -> AiArg(k, v) }
+    )
+
+    fun argsMap(): Map<String, String> = args.associate { it.name to it.value }
+}
 
 fun <T : Any> DecidingAgentAPI.decide(shimmerInstance: ShimmerInstance<T>): Future<AiDecision> {
     val schema = shimmerInstance.klass.toJsonClassMetadataString()

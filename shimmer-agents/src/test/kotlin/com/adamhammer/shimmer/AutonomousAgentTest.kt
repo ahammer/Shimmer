@@ -27,7 +27,7 @@ class AutonomousAgentTest {
     @Test
     fun `step dispatches to understand with data arg`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("understand", mapOf("data" to "hello world"))),
+            decisions = listOf(AiDecision("understand", mapOf<String, String>("data" to "hello world"))),
             apiResponses = listOf("understood: hello world")
         )
 
@@ -38,7 +38,7 @@ class AutonomousAgentTest {
     @Test
     fun `step dispatches to analyze`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("analyze", emptyMap())),
+            decisions = listOf(AiDecision("analyze", emptyMap<String, String>())),
             apiResponses = listOf("analysis complete")
         )
 
@@ -49,7 +49,7 @@ class AutonomousAgentTest {
     @Test
     fun `step dispatches to plan`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("plan", emptyMap())),
+            decisions = listOf(AiDecision("plan", emptyMap<String, String>())),
             apiResponses = listOf("plan created")
         )
 
@@ -60,7 +60,7 @@ class AutonomousAgentTest {
     @Test
     fun `step dispatches to reflect`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("reflect", emptyMap())),
+            decisions = listOf(AiDecision("reflect", emptyMap<String, String>())),
             apiResponses = listOf("reflection done")
         )
 
@@ -71,7 +71,7 @@ class AutonomousAgentTest {
     @Test
     fun `step dispatches to act`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("act", emptyMap())),
+            decisions = listOf(AiDecision("act", emptyMap<String, String>())),
             apiResponses = listOf("action taken")
         )
 
@@ -82,7 +82,7 @@ class AutonomousAgentTest {
     @Test
     fun `step throws on unknown method`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("nonexistent", emptyMap())),
+            decisions = listOf(AiDecision("nonexistent", emptyMap<String, String>())),
             apiResponses = listOf("irrelevant")
         )
 
@@ -94,7 +94,7 @@ class AutonomousAgentTest {
     @Test
     fun `step throws when understand is missing data arg`() {
         val agent = buildAutonomousAgent(
-            decisions = listOf(AiDecision("understand", emptyMap())),
+            decisions = listOf(AiDecision("understand", emptyMap<String, String>())),
             apiResponses = listOf("irrelevant")
         )
 
@@ -106,9 +106,9 @@ class AutonomousAgentTest {
     @Test
     fun `multi-step sequence executes correctly`() {
         val decisions = listOf(
-            AiDecision("understand", mapOf("data" to "input")),
-            AiDecision("analyze", emptyMap()),
-            AiDecision("act", emptyMap())
+            AiDecision("understand", mapOf<String, String>("data" to "input")),
+            AiDecision("analyze", emptyMap<String, String>()),
+            AiDecision("act", emptyMap<String, String>())
         )
         val responses = listOf("understood", "analyzed", "acted")
 
@@ -132,8 +132,8 @@ class AutonomousAgentTest {
     @Test
     fun `memory from @Memorize calls is forwarded to decider`() {
         val decisions = listOf(
-            AiDecision("understand", mapOf("data" to "hello")),
-            AiDecision("analyze", emptyMap())
+            AiDecision("understand", mapOf<String, String>("data" to "hello")),
+            AiDecision("analyze", emptyMap<String, String>())
         )
         val responses = listOf("understood-result", "analyzed-result")
 

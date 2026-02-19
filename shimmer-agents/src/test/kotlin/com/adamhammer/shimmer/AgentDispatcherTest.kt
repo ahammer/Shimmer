@@ -20,14 +20,14 @@ class AgentDispatcherTest {
     @Test
     fun `dispatch calls method by name and returns result`() {
         val dispatcher = buildDispatcher("analysis-result")
-        val result = dispatcher.dispatch(AiDecision("analyze", emptyMap()))
+        val result = dispatcher.dispatch(AiDecision("analyze", emptyMap<String, String>()))
         assertEquals("analysis-result", result)
     }
 
     @Test
     fun `dispatch passes argument to single-param method`() {
         val dispatcher = buildDispatcher("understood")
-        val result = dispatcher.dispatch(AiDecision("understand", mapOf("data" to "input")))
+        val result = dispatcher.dispatch(AiDecision("understand", mapOf<String, String>("data" to "input")))
         assertEquals("understood", result)
     }
 
@@ -35,7 +35,7 @@ class AgentDispatcherTest {
     fun `dispatch throws for unknown method`() {
         val dispatcher = buildDispatcher("irrelevant")
         assertThrows(IllegalArgumentException::class.java) {
-            dispatcher.dispatch(AiDecision("nonexistent", emptyMap()))
+            dispatcher.dispatch(AiDecision("nonexistent", emptyMap<String, String>()))
         }
     }
 
@@ -43,7 +43,7 @@ class AgentDispatcherTest {
     fun `dispatch throws when required arg is missing`() {
         val dispatcher = buildDispatcher("irrelevant")
         assertThrows(IllegalArgumentException::class.java) {
-            dispatcher.dispatch(AiDecision("understand", emptyMap()))
+            dispatcher.dispatch(AiDecision("understand", emptyMap<String, String>()))
         }
     }
 
@@ -52,7 +52,7 @@ class AgentDispatcherTest {
         val methods = listOf("analyze", "plan", "reflect", "act")
         for (methodName in methods) {
             val dispatcher = buildDispatcher("$methodName-result")
-            val result = dispatcher.dispatch(AiDecision(methodName, emptyMap()))
+            val result = dispatcher.dispatch(AiDecision(methodName, emptyMap<String, String>()))
             assertEquals("$methodName-result", result)
         }
     }

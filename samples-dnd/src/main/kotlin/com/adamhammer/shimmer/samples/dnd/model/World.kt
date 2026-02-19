@@ -3,87 +3,164 @@ package com.adamhammer.shimmer.samples.dnd.model
 import com.adamhammer.shimmer.annotations.AiSchema
 import kotlinx.serialization.Serializable
 
+// ── Core Character Model ────────────────────────────────────────────────────
+
 @Serializable
-@AiSchema(title = "Player", description = "A player character in the adventure")
-data class Player(
-    @field:AiSchema(title = "Name", description = "The player's character name")
-    val name: String = "Unknown",
-    @field:AiSchema(title = "Race", description = "The character's race (e.g. Human, Elf, Dwarf)")
-    val race: String = "Human",
-    @field:AiSchema(title = "Class", description = "The character's class (e.g. Fighter, Wizard, Rogue)")
-    val characterClass: String = "Fighter",
-    @field:AiSchema(title = "HP", description = "Current hit points")
-    val hp: Int = 20,
-    @field:AiSchema(title = "Max HP", description = "Maximum hit points")
-    val maxHp: Int = 20,
-    @field:AiSchema(title = "Inventory", description = "Items the player is carrying")
-    val inventory: List<String> = listOf("Torch", "Rope"),
-    @field:AiSchema(title = "Status", description = "Current status effects (e.g. healthy, poisoned, wounded)")
-    val status: String = "healthy"
+@AiSchema(title = "AbilityScores", description = "The six D&D ability scores for a character")
+data class AbilityScores(
+    @field:AiSchema(description = "Strength — melee attacks, carrying capacity, athletics")
+    val str: Int = 10,
+    @field:AiSchema(description = "Dexterity — ranged attacks, AC, stealth, acrobatics")
+    val dex: Int = 10,
+    @field:AiSchema(description = "Constitution — hit points, endurance, concentration")
+    val con: Int = 10,
+    @field:AiSchema(description = "Intelligence — arcana, investigation, wizard spellcasting")
+    val int: Int = 10,
+    @field:AiSchema(description = "Wisdom — perception, insight, cleric spellcasting")
+    val wis: Int = 10,
+    @field:AiSchema(description = "Charisma — persuasion, deception, intimidation")
+    val cha: Int = 10
 )
+
+@Serializable
+@AiSchema(title = "Character", description = "A player character in the adventuring party")
+data class Character(
+    @field:AiSchema(description = "The character's name")
+    val name: String = "Unknown",
+    @field:AiSchema(description = "Race (Human, Elf, Dwarf, Halfling)")
+    val race: String = "Human",
+    @field:AiSchema(description = "Class (Fighter, Wizard, Rogue, Cleric)")
+    val characterClass: String = "Fighter",
+    @field:AiSchema(description = "Character level")
+    val level: Int = 1,
+    @field:AiSchema(description = "The six ability scores")
+    val abilityScores: AbilityScores = AbilityScores(),
+    @field:AiSchema(description = "Armor Class")
+    val ac: Int = 10,
+    @field:AiSchema(description = "Current hit points")
+    val hp: Int = 10,
+    @field:AiSchema(description = "Maximum hit points")
+    val maxHp: Int = 10,
+    @field:AiSchema(description = "Proficiency bonus")
+    val proficiencyBonus: Int = 2,
+    @field:AiSchema(description = "Saving throw proficiencies (e.g. STR, CON)")
+    val savingThrows: List<String> = emptyList(),
+    @field:AiSchema(description = "Skill proficiencies (e.g. Athletics, Stealth)")
+    val skills: List<String> = emptyList(),
+    @field:AiSchema(description = "Items the character is carrying")
+    val inventory: List<String> = emptyList(),
+    @field:AiSchema(description = "Current status effects (e.g. healthy, poisoned, wounded)")
+    val status: String = "healthy",
+    @field:AiSchema(description = "The character's backstory and personality")
+    val backstory: String = "",
+    @field:AiSchema(description = "Whether this character is controlled by a human player")
+    val isHuman: Boolean = true
+)
+
+// ── World Model ─────────────────────────────────────────────────────────────
 
 @Serializable
 @AiSchema(title = "Location", description = "A location in the game world")
 data class Location(
-    @field:AiSchema(title = "Name", description = "The name of this location")
+    @field:AiSchema(description = "The name of this location")
     val name: String = "The Rusty Tankard Inn",
-    @field:AiSchema(title = "Description", description = "A description of the location")
+    @field:AiSchema(description = "A description of the location")
     val description: String = "A dimly lit tavern with creaking floorboards and the smell of ale in the air.",
-    @field:AiSchema(title = "Exits", description = "Available exits and where they lead")
+    @field:AiSchema(description = "Available exits and where they lead")
     val exits: List<String> = listOf("north: Town Square", "upstairs: Guest Rooms"),
-    @field:AiSchema(title = "NPCs", description = "Non-player characters present at this location")
+    @field:AiSchema(description = "Non-player characters present at this location")
     val npcs: List<String> = listOf("Barkeep Marta"),
-    @field:AiSchema(title = "Items", description = "Visible or discoverable items at this location")
+    @field:AiSchema(description = "Visible or discoverable items at this location")
     val items: List<String> = emptyList()
 )
 
 @Serializable
 @AiSchema(title = "World", description = "The complete state of the D&D game world")
 data class World(
-    @field:AiSchema(title = "Player", description = "The player character")
-    val player: Player = Player(),
-    @field:AiSchema(title = "Location", description = "The current location")
+    @field:AiSchema(description = "The adventuring party — all player characters")
+    val party: List<Character> = emptyList(),
+    @field:AiSchema(description = "The current location")
     val location: Location = Location(),
-    @field:AiSchema(title = "Turn", description = "The current turn number")
-    val turn: Int = 0,
-    @field:AiSchema(title = "Quest Log", description = "Active quests and objectives")
+    @field:AiSchema(description = "The current round number")
+    val round: Int = 0,
+    @field:AiSchema(description = "Active quests and objectives")
     val questLog: List<String> = emptyList()
 )
 
-// --- AI Response Types ---
+// ── AI Response Types ───────────────────────────────────────────────────────
 
 @Serializable
 @AiSchema(title = "SceneDescription", description = "A vivid description of the current scene")
 data class SceneDescription(
-    @field:AiSchema(title = "Narrative", description = "An atmospheric description of what the player sees, hears, and smells")
+    @field:AiSchema(description = "An atmospheric description of what the party sees, hears, and smells")
     val narrative: String = "",
-    @field:AiSchema(title = "Available Actions", description = "Suggested actions the player could take")
+    @field:AiSchema(description = "Suggested actions the party could take")
     val availableActions: List<String> = emptyList()
 )
 
 @Serializable
-@AiSchema(title = "ActionResult", description = "The outcome of a player action")
+@AiSchema(title = "DiceRollRequest", description = "A request for a character to roll dice")
+data class DiceRollRequest(
+    @field:AiSchema(description = "Name of the character who must roll")
+    val characterName: String = "",
+    @field:AiSchema(description = "Type of roll (e.g. 'Strength check', 'Attack roll', 'Dexterity saving throw')")
+    val rollType: String = "",
+    @field:AiSchema(description = "The Difficulty Class to beat")
+    val difficulty: Int = 10,
+    @field:AiSchema(description = "Ability modifier to add to the roll (computed from character stats)")
+    val modifier: Int = 0
+)
+
+@Serializable
+@AiSchema(title = "ActionResult", description = "The outcome of a character's action")
 data class ActionResult(
-    @field:AiSchema(title = "Narrative", description = "A vivid narration of what happens as a result of the action")
+    @field:AiSchema(description = "A vivid narration of what happens as a result of the action")
     val narrative: String = "",
-    @field:AiSchema(title = "Success", description = "Whether the action succeeded")
+    @field:AiSchema(description = "Whether the action succeeded")
     val success: Boolean = true,
-    @field:AiSchema(title = "HP Change", description = "Change to player HP (negative for damage, positive for healing, 0 for none)")
+    @field:AiSchema(description = "Name of the character affected (defaults to acting character)")
+    val targetCharacterName: String = "",
+    @field:AiSchema(description = "Change to target character's HP (negative for damage, positive for healing, 0 for none)")
     val hpChange: Int = 0,
-    @field:AiSchema(title = "Items Gained", description = "Items added to the player's inventory")
+    @field:AiSchema(description = "Items added to the character's inventory")
     val itemsGained: List<String> = emptyList(),
-    @field:AiSchema(title = "Items Lost", description = "Items removed from the player's inventory")
+    @field:AiSchema(description = "Items removed from the character's inventory")
     val itemsLost: List<String> = emptyList(),
-    @field:AiSchema(title = "New Location", description = "If the player moved, the new location name. Empty if they stayed.")
+    @field:AiSchema(description = "If the party moved, the new location name. Empty if they stayed.")
     val newLocationName: String = "",
-    @field:AiSchema(title = "New Location Description", description = "If the player moved, a description of the new location. Empty if they stayed.")
+    @field:AiSchema(description = "If the party moved, a description of the new location.")
     val newLocationDescription: String = "",
-    @field:AiSchema(title = "New Exits", description = "If the player moved, the exits at the new location")
+    @field:AiSchema(description = "If the party moved, the exits at the new location")
     val newExits: List<String> = emptyList(),
-    @field:AiSchema(title = "New NPCs", description = "If the player moved, NPCs at the new location")
+    @field:AiSchema(description = "If the party moved, NPCs at the new location")
     val newNpcs: List<String> = emptyList(),
-    @field:AiSchema(title = "Quest Update", description = "New quest or objective to add, or empty if none")
+    @field:AiSchema(description = "New quest or objective to add, or empty if none")
     val questUpdate: String = "",
-    @field:AiSchema(title = "Status Change", description = "New status for the player, or empty to keep current")
-    val statusChange: String = ""
+    @field:AiSchema(description = "New status effect for the character, or empty to keep current")
+    val statusChange: String = "",
+    @field:AiSchema(
+        description = "If a dice roll is required before this action resolves, " +
+            "provide the request here. Null/default if no roll needed."
+    )
+    val diceRollRequest: DiceRollRequest? = null
+)
+
+@Serializable
+@AiSchema(title = "BackstoryResult", description = "An AI-generated backstory with suggested stats for a character")
+data class BackstoryResult(
+    @field:AiSchema(description = "A rich 2-3 paragraph backstory for the character")
+    val backstory: String = "",
+    @field:AiSchema(description = "Suggested ability scores tailored to the character's race and class")
+    val suggestedAbilityScores: AbilityScores = AbilityScores(),
+    @field:AiSchema(description = "Starting equipment appropriate for the character")
+    val startingItems: List<String> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "PlayerAction", description = "An AI-controlled character's chosen action")
+data class PlayerAction(
+    @field:AiSchema(description = "The action the character wants to take, described in first person")
+    val action: String = "",
+    @field:AiSchema(description = "Brief internal reasoning for why this action was chosen")
+    val reasoning: String = ""
 )

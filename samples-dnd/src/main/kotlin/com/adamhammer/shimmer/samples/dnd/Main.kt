@@ -1,168 +1,407 @@
 package com.adamhammer.shimmer.samples.dnd
 
 import com.adamhammer.shimmer.adapters.OpenAiAdapter
-import com.adamhammer.shimmer.shimmer
+import com.adamhammer.shimmer.agents.AutonomousAgent
+import com.adamhammer.shimmer.agents.DecidingAgentAPI
 import com.adamhammer.shimmer.samples.dnd.model.*
+import com.adamhammer.shimmer.shimmer
 import java.util.Scanner
+import kotlin.random.Random
 
 /**
- * A text-based D&D adventure powered by Shimmer.
+ * A multi-player text-based D&D adventure powered by Shimmer.
  *
- * The AI serves as the Dungeon Master — narrating scenes, resolving actions,
- * and making the world react to the player's choices. A WorldStateInterceptor
- * keeps the AI aware of full game state on every call, and a ResiliencePolicy
- * validates results and retries if the AI returns something unreasonable.
+ * Features:
+ * - 1–4 player party with configurable human/AI members
+ * - Full D&D ability scores, AC, proficiency, saving throws
+ * - AI-generated backstories for AI companions
+ * - Dice rolling system (DM requests rolls, players input values)
+ * - AI party members use AutonomousAgent from shimmer-agents
+ * - Round-based gameplay with DM narration between rounds
  */
 fun main() {
     val scanner = Scanner(System.`in`)
 
-    println("═══════════════════════════════════════════════════")
-    println("       ⚔  SHIMMER QUEST — A Text D&D Adventure  ⚔")
-    println("═══════════════════════════════════════════════════")
+    println("═══════════════════════════════════════════════════════")
+    println("  ⚔  SHIMMER QUEST — A Multi-Player D&D Adventure  ⚔")
+    println("═══════════════════════════════════════════════════════")
     println()
 
-    // --- Character creation ---
-    print("Enter your character's name: ")
-    val name = scanner.nextLine().ifBlank { "Adventurer" }
+    val world = createParty(scanner)
+    runGameLoop(scanner, world)
+}
 
-    print("Choose a race (Human/Elf/Dwarf/Halfling): ")
+// ── Party Creation ──────────────────────────────────────────────────────────
+
+private fun createParty(scanner: Scanner): World {
+    print("How many party members? (1-4): ")
+    val partySize = scanner.nextLine().trim()
+        .toIntOrNull()?.coerceIn(1, 4) ?: 2
+    println()
+
+    val backstoryDm = shimmer<DungeonMasterAPI> {
+        setAdapterClass(OpenAiAdapter::class)
+        resilience { maxRetries = 1 }
+    }.api
+
+    val party = mutableListOf<Character>()
+
+    for (i in 1..partySize) {
+        val character = createCharacter(scanner, i, partySize, backstoryDm)
+        party.add(character)
+        println()
+        println(CharacterUtils.formatStats(character))
+        println()
+    }
+
+    return World(party = party, location = Location(), round = 0)
+}
+
+private fun createCharacter(
+    scanner: Scanner,
+    index: Int,
+    total: Int,
+    backstoryDm: DungeonMasterAPI
+): Character {
+    println("─── Character $index of $total ────────────────────────")
+
+    print("  Name: ")
+    val name = scanner.nextLine().ifBlank { "Hero$index" }
+
+    print("  Race (Human/Elf/Dwarf/Halfling): ")
     val race = scanner.nextLine().ifBlank { "Human" }
 
-    print("Choose a class (Fighter/Wizard/Rogue/Cleric): ")
+    print("  Class (Fighter/Wizard/Rogue/Cleric): ")
     val characterClass = scanner.nextLine().ifBlank { "Fighter" }
 
-    var world = World(
-        player = Player(
-            name = name,
-            race = race,
-            characterClass = characterClass,
-            hp = 20,
-            maxHp = 20,
-            inventory = listOf("Torch", "Rope", startingItem(characterClass))
-        ),
-        location = Location(),
-        turn = 0
+    print("  Controlled by (h)uman or (a)i? [h]: ")
+    val isHuman = !scanner.nextLine().trim().lowercase().startsWith("a")
+
+    val (backstory, abilityScores) = resolveBackstoryAndStats(
+        scanner, backstoryDm, name, race, characterClass, isHuman
     )
 
+    return CharacterUtils.buildCharacter(
+        name, race, characterClass, abilityScores, backstory, isHuman
+    )
+}
+
+private fun resolveBackstoryAndStats(
+    scanner: Scanner,
+    backstoryDm: DungeonMasterAPI,
+    name: String,
+    race: String,
+    characterClass: String,
+    isHuman: Boolean
+): Pair<String, AbilityScores> {
+    if (!isHuman) {
+        println("  Generating backstory for AI companion $name...")
+        val result = backstoryDm
+            .generateBackstory(name, race, characterClass).get()
+        println("  ${result.backstory.take(200)}...")
+        println()
+        return result.backstory to result.suggestedAbilityScores
+    }
+
+    println("  Write a backstory (or Enter for AI-generated):")
+    print("  > ")
+    val typed = scanner.nextLine().trim()
+    if (typed.isNotBlank()) {
+        return typed to assignAbilityScores(scanner, characterClass)
+    }
+    println("  Generating backstory for $name the $race $characterClass...")
+    val result = backstoryDm
+        .generateBackstory(name, race, characterClass).get()
+    println("  ${result.backstory.take(200)}...")
     println()
-    println("Welcome, $name the $race $characterClass!")
-    println("Your adventure begins...")
+    return result.backstory to assignAbilityScores(scanner, characterClass)
+}
+
+// ── Game Loop ───────────────────────────────────────────────────────────────
+
+private fun runGameLoop(scanner: Scanner, initialWorld: World) {
+    var world = initialWorld
+
+    println("═══════════════════════════════════════════════════════")
+    println("  Party of ${world.party.size} sets forth on an adventure!")
+    println("═══════════════════════════════════════════════════════")
     println()
 
-    // --- Build the Shimmer-powered DM ---
     val dm = shimmer<DungeonMasterAPI> {
         setAdapterClass(OpenAiAdapter::class)
         addInterceptor(WorldStateInterceptor { world })
         resilience {
             maxRetries = 2
             retryDelayMs = 500
-            resultValidator = { result ->
-                when (result) {
-                    is ActionResult -> result.narrative.isNotBlank() && result.hpChange in -15..15
-                    is SceneDescription -> result.narrative.isNotBlank()
+            resultValidator = { r ->
+                when (r) {
+                    is ActionResult -> r.narrative.isNotBlank()
+                        && r.hpChange in -15..15
+                    is SceneDescription -> r.narrative.isNotBlank()
                     else -> true
                 }
             }
         }
     }.api
 
-    // --- Opening scene ---
-    val scene = dm.describeScene().get()
-    printScene(scene, world)
+    val aiAgents = buildAiAgents(world)
 
-    // --- Game loop ---
-    while (world.player.hp > 0) {
-        world = world.copy(turn = world.turn + 1)
+    val openingScene = dm.describeScene().get()
+    printScene(openingScene, world)
 
-        print("\n> What do you do? ")
-        val input = scanner.nextLine().trim()
-
-        if (input.equals("quit", ignoreCase = true) || input.equals("exit", ignoreCase = true)) {
-            println("\nYou lay down your arms. The adventure ends here.")
-            println("Final stats: HP ${world.player.hp}/${world.player.maxHp} | " +
-                    "Inventory: ${world.player.inventory.joinToString()}")
-            break
-        }
-
-        if (input.equals("status", ignoreCase = true)) {
-            printStatus(world)
-            continue
-        }
-
-        if (input.equals("look", ignoreCase = true)) {
-            val lookScene = dm.describeScene().get()
-            printScene(lookScene, world)
-            continue
-        }
-
-        // Process the player's action
-        val result = dm.processAction(input).get()
-        world = applyResult(world, result)
-
+    while (world.party.any { it.hp > 0 }) {
+        world = world.copy(round = world.round + 1)
         println()
-        println("─── DM ───────────────────────────────────────────")
-        println(result.narrative)
-        if (result.hpChange != 0) {
-            val sign = if (result.hpChange > 0) "+" else ""
-            println("  ♥ HP: $sign${result.hpChange} (${world.player.hp}/${world.player.maxHp})")
-        }
-        if (result.itemsGained.isNotEmpty()) {
-            println("  + Gained: ${result.itemsGained.joinToString()}")
-        }
-        if (result.itemsLost.isNotEmpty()) {
-            println("  - Lost: ${result.itemsLost.joinToString()}")
-        }
-        if (result.questUpdate.isNotBlank()) {
-            println("  📜 Quest: ${result.questUpdate}")
-        }
-        println("──────────────────────────────────────────────────")
+        println("══════════════ Round ${world.round} ══════════════")
 
-        if (world.player.hp <= 0) {
+        world = processRound(scanner, dm, world, aiAgents)
+
+        if (world.party.all { it.hp <= 0 }) {
             println()
-            println("💀 You have fallen. Your adventure ends here.")
-            println("Game Over after ${world.turn} turns.")
+            println("💀💀💀 Total Party Kill! 💀💀💀")
+            println("Game Over after ${world.round} rounds.")
+            printParty(world)
+            return
+        }
+
+        println()
+        val summary = dm.narrateRoundSummary().get()
+        printRoundSummary(summary, world)
+    }
+}
+
+private fun processRound(
+    scanner: Scanner,
+    dm: DungeonMasterAPI,
+    initialWorld: World,
+    aiAgents: Map<String, AutonomousAgent<PlayerAgentAPI>>
+): World {
+    var world = initialWorld
+
+    for (character in world.party) {
+        if (character.hp <= 0) {
+            println("\n  💀 ${character.name} is unconscious.")
+            continue
+        }
+
+        val action = resolveCharacterAction(
+            scanner, dm, character, aiAgents, world
+        ) ?: return world // quit command
+
+        val result = dm.processAction(character.name, action).get()
+        val finalResult = handleDiceRoll(
+            scanner, dm, character, result
+        )
+
+        world = applyResult(world, finalResult, character.name)
+        printActionResult(finalResult, world)
+    }
+    return world
+}
+
+private fun resolveCharacterAction(
+    scanner: Scanner,
+    dm: DungeonMasterAPI,
+    character: Character,
+    aiAgents: Map<String, AutonomousAgent<PlayerAgentAPI>>,
+    world: World
+): String? {
+    if (!character.isHuman) {
+        return resolveAiAction(character, aiAgents)
+    }
+    return resolveHumanAction(scanner, dm, character, aiAgents, world)
+}
+
+private fun resolveAiAction(
+    character: Character,
+    aiAgents: Map<String, AutonomousAgent<PlayerAgentAPI>>
+): String {
+    println("\n  🤖 ${character.name} is thinking...")
+    val agent = aiAgents[character.name]
+    if (agent != null) {
+        agent.step()
+        val decisionResult = agent.step()
+        val action = parseAiAction(decisionResult, character.name)
+        println("  🤖 ${character.name}: \"$action\"")
+        return action
+    }
+    val fallback = "I look around cautiously."
+    println("  🤖 ${character.name}: \"$fallback\"")
+    return fallback
+}
+
+private fun resolveHumanAction(
+    scanner: Scanner,
+    dm: DungeonMasterAPI,
+    character: Character,
+    aiAgents: Map<String, AutonomousAgent<PlayerAgentAPI>>,
+    world: World
+): String? {
+    print("\n> ${character.name}, what do you do? ")
+    val input = scanner.nextLine().trim()
+
+    when {
+        input.equals("quit", true) || input.equals("exit", true) -> {
+            println("\nThe party lays down their arms.")
+            printParty(world)
+            return null
+        }
+        input.equals("status", true) -> {
+            printParty(world)
+            return resolveCharacterAction(
+                scanner, dm, character, aiAgents, world
+            )
+        }
+        input.equals("look", true) -> {
+            val scene = dm.describeScene().get()
+            printScene(scene, world)
+            return resolveCharacterAction(
+                scanner, dm, character, aiAgents, world
+            )
+        }
+        else -> return input
+    }
+}
+
+private fun handleDiceRoll(
+    scanner: Scanner,
+    dm: DungeonMasterAPI,
+    character: Character,
+    result: ActionResult
+): ActionResult {
+    val roll = result.diceRollRequest ?: return result
+
+    val diceValue = if (character.isHuman) {
+        println()
+        println(buildString {
+            append("  🎲 ${roll.characterName}: ${roll.rollType}")
+            append(" (DC ${roll.difficulty}, ${formatMod(roll.modifier)})")
+        })
+        print("  🎲 Enter your d20 roll (1-20): ")
+        scanner.nextLine().trim().toIntOrNull()
+            ?.coerceIn(1, 20) ?: Random.nextInt(1, 21)
+    } else {
+        val rolled = Random.nextInt(1, 21)
+        println("  🎲 ${roll.characterName} rolls a d20: $rolled")
+        rolled
+    }
+
+    val total = diceValue + roll.modifier
+    val outcome = if (total >= roll.difficulty) "SUCCESS!" else "FAILURE!"
+    println(
+        "  🎲 Roll: $diceValue ${formatMod(roll.modifier)}" +
+            " = $total vs DC ${roll.difficulty} → $outcome"
+    )
+
+    return dm.resolveRoll(
+        roll.characterName,
+        roll.rollType,
+        diceValue,
+        roll.modifier,
+        roll.difficulty
+    ).get()
+}
+
+// ── AI Agent Builder ────────────────────────────────────────────────────────
+
+private fun buildAiAgents(
+    world: World
+): Map<String, AutonomousAgent<PlayerAgentAPI>> {
+    val agents = mutableMapOf<String, AutonomousAgent<PlayerAgentAPI>>()
+
+    for (character in world.party.filter { !it.isHuman }) {
+        val playerInstance = shimmer<PlayerAgentAPI> {
+            setAdapterClass(OpenAiAdapter::class)
+            addInterceptor(WorldStateInterceptor { world })
+            addInterceptor(CharacterInterceptor {
+                world.party.first { it.name == character.name }
+            })
+            resilience { maxRetries = 1 }
+        }
+
+        val decider = shimmer<DecidingAgentAPI> {
+            setAdapterClass(OpenAiAdapter::class)
+            addInterceptor(WorldStateInterceptor { world })
+            addInterceptor(CharacterInterceptor {
+                world.party.first { it.name == character.name }
+            })
+            resilience { maxRetries = 1 }
+        }.api
+
+        agents[character.name] = AutonomousAgent(playerInstance, decider)
+    }
+
+    return agents
+}
+
+// ── Ability Score Assignment ────────────────────────────────────────────────
+
+private fun assignAbilityScores(
+    scanner: Scanner,
+    characterClass: String
+): AbilityScores {
+    println()
+    val scores = CharacterUtils.standardArray.joinToString()
+    println("  Ability scores — standard array: $scores")
+    println("  (a)uto-assign based on class, or (m)anual? [a]: ")
+    print("  > ")
+    val choice = scanner.nextLine().trim().lowercase()
+
+    if (choice.startsWith("m")) {
+        return manualAssignScores(scanner)
+    }
+    return CharacterUtils.autoAssignScores(characterClass)
+}
+
+private fun manualAssignScores(scanner: Scanner): AbilityScores {
+    val remaining = CharacterUtils.standardArray.toMutableList()
+    val assigned = mutableMapOf<String, Int>()
+    for (ability in CharacterUtils.abilityNames) {
+        println("  Remaining: ${remaining.joinToString()}")
+        print("  $ability = ")
+        val value = scanner.nextLine().trim().toIntOrNull()
+        if (value != null && value in remaining) {
+            remaining.remove(value)
+            assigned[ability] = value
+        } else {
+            val auto = remaining.removeFirst()
+            assigned[ability] = auto
+            println("  (assigned $auto)")
         }
     }
+    return AbilityScores(
+        str = assigned["STR"] ?: 10,
+        dex = assigned["DEX"] ?: 10,
+        con = assigned["CON"] ?: 10,
+        int = assigned["INT"] ?: 10,
+        wis = assigned["WIS"] ?: 10,
+        cha = assigned["CHA"] ?: 10
+    )
 }
 
-private fun startingItem(characterClass: String): String = when (characterClass.lowercase()) {
-    "wizard" -> "Spellbook"
-    "rogue" -> "Lockpicks"
-    "cleric" -> "Holy Symbol"
-    "fighter" -> "Longsword"
-    else -> "Dagger"
-}
+// ── Result Application ──────────────────────────────────────────────────────
 
-private fun printScene(scene: SceneDescription, world: World) {
-    println()
-    println("═══ ${world.location.name} ═══")
-    println(scene.narrative)
-    if (scene.availableActions.isNotEmpty()) {
-        println()
-        println("Possible actions: ${scene.availableActions.joinToString(" | ")}")
+private fun applyResult(
+    world: World,
+    result: ActionResult,
+    actingCharacterName: String
+): World {
+    val targetName = result.targetCharacterName.ifBlank {
+        actingCharacterName
     }
-    println()
-    println("(Type 'status' for stats, 'look' to re-examine, 'quit' to end)")
-}
 
-private fun printStatus(world: World) {
-    val p = world.player
-    println()
-    println("═══ ${p.name} the ${p.race} ${p.characterClass} ═══")
-    println("  HP: ${p.hp}/${p.maxHp}  |  Status: ${p.status}")
-    println("  Inventory: ${p.inventory.joinToString()}")
-    println("  Location: ${world.location.name}")
-    if (world.questLog.isNotEmpty()) {
-        println("  Quests: ${world.questLog.joinToString("; ")}")
+    val newParty = world.party.map { c ->
+        if (c.name.equals(targetName, ignoreCase = true)) {
+            val newHp = (c.hp + result.hpChange)
+                .coerceIn(0, c.maxHp)
+            val newInv = (c.inventory + result.itemsGained) -
+                result.itemsLost.toSet()
+            val newStatus = result.statusChange.ifBlank { c.status }
+            c.copy(hp = newHp, inventory = newInv, status = newStatus)
+        } else {
+            c
+        }
     }
-    println("  Turn: ${world.turn}")
-}
-
-private fun applyResult(world: World, result: ActionResult): World {
-    val player = world.player
-    val newHp = (player.hp + result.hpChange).coerceIn(0, player.maxHp)
-    val newInventory = (player.inventory + result.itemsGained) - result.itemsLost.toSet()
-    val newStatus = result.statusChange.ifBlank { player.status }
 
     val newLocation = if (result.newLocationName.isNotBlank()) {
         Location(
@@ -182,12 +421,86 @@ private fun applyResult(world: World, result: ActionResult): World {
     }
 
     return world.copy(
-        player = player.copy(
-            hp = newHp,
-            inventory = newInventory,
-            status = newStatus
-        ),
+        party = newParty,
         location = newLocation,
         questLog = newQuestLog
     )
+}
+
+// ── Display Helpers ─────────────────────────────────────────────────────────
+
+private fun printScene(scene: SceneDescription, world: World) {
+    println()
+    println("═══ ${world.location.name} ═══")
+    println(scene.narrative)
+    if (scene.availableActions.isNotEmpty()) {
+        println()
+        val actions = scene.availableActions.joinToString(" | ")
+        println("Possible actions: $actions")
+    }
+    println()
+    println("Commands: 'status' | 'look' | 'quit'")
+}
+
+private fun printActionResult(result: ActionResult, world: World) {
+    println()
+    println("─── DM ───────────────────────────────────────────")
+    println(result.narrative)
+    val target = result.targetCharacterName.ifBlank { "Unknown" }
+    val targetChar = world.party.find {
+        it.name.equals(target, ignoreCase = true)
+    }
+    if (result.hpChange != 0 && targetChar != null) {
+        val sign = if (result.hpChange > 0) "+" else ""
+        println("  ♥ ${targetChar.name} HP: " +
+            "$sign${result.hpChange} (${targetChar.hp}/${targetChar.maxHp})")
+    }
+    if (result.itemsGained.isNotEmpty()) {
+        println("  + Gained: ${result.itemsGained.joinToString()}")
+    }
+    if (result.itemsLost.isNotEmpty()) {
+        println("  - Lost: ${result.itemsLost.joinToString()}")
+    }
+    if (result.questUpdate.isNotBlank()) {
+        println("  📜 Quest: ${result.questUpdate}")
+    }
+    println("──────────────────────────────────────────────────")
+}
+
+private fun printRoundSummary(
+    summary: SceneDescription,
+    world: World
+) {
+    println("─── End of Round ${world.round} ─────────────────────")
+    println(summary.narrative)
+    if (summary.availableActions.isNotEmpty()) {
+        val actions = summary.availableActions.joinToString(" | ")
+        println("Suggested actions: $actions")
+    }
+    println("──────────────────────────────────────────────────")
+}
+
+private fun printParty(world: World) {
+    println()
+    println("═══ Party — ${world.location.name} (Round ${world.round}) ═══")
+    for (c in world.party) {
+        println(CharacterUtils.formatStats(c))
+    }
+    if (world.questLog.isNotEmpty()) {
+        println("  📜 Quests: ${world.questLog.joinToString("; ")}")
+    }
+}
+
+private fun formatMod(mod: Int): String =
+    if (mod >= 0) "+$mod" else "$mod"
+
+private fun parseAiAction(
+    stepResult: String,
+    characterName: String
+): String {
+    val pattern = Regex(""""action"\s*:\s*"([^"]+)"""")
+    val match = pattern.find(stepResult)
+    return match?.groupValues?.get(1) ?: stepResult.take(200).ifBlank {
+        "$characterName looks around cautiously."
+    }
 }

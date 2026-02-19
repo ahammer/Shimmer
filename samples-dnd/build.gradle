@@ -15,4 +15,5 @@ run {
 dependencies {
     implementation project(':shimmer-core')
     implementation project(':shimmer-openai')
+    implementation project(':shimmer-agents')
 }
