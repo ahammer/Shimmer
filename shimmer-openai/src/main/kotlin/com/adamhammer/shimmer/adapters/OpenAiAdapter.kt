@@ -7,6 +7,7 @@ import com.adamhammer.shimmer.model.MessageRole
 import com.adamhammer.shimmer.model.ToolCall
 import com.adamhammer.shimmer.model.ToolDefinition
 import com.adamhammer.shimmer.model.ShimmerDeserializationException
+import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.utils.toJsonSchema
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -24,6 +25,8 @@ import com.openai.models.ChatCompletionAssistantMessageParam
 import com.openai.models.ChatCompletionSystemMessageParam
 import com.openai.models.ChatCompletionUserMessageParam
 import com.openai.models.ResponseFormatJsonSchema
+import com.openai.models.ImageGenerateParams
+import com.openai.models.ImageModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -78,6 +81,11 @@ class OpenAiAdapter(
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R {
+        if (resultClass == ImageResult::class) {
+            @Suppress("UNCHECKED_CAST")
+            return handleImageRequest(context) as R
+        }
+
         val userPrompt = buildUserPrompt(context)
         val allToolDefs = collectToolDefs(context, toolProviders)
         val hasTools = allToolDefs.isNotEmpty() && toolProviders.isNotEmpty()
@@ -117,6 +125,50 @@ class OpenAiAdapter(
         }
 
         throw ShimmerDeserializationException("Exceeded maximum tool-calling rounds ($maxToolRounds)")
+    }
+
+    private fun handleImageRequest(context: PromptContext): ImageResult {
+        val promptMessages = buildImagePromptMessages(context)
+        val promptParams = buildParams(messages = promptMessages, tools = null, responseFormat = null)
+
+        val promptCompletion: ChatCompletion = client.chat().completions().create(promptParams)
+        val promptText = promptCompletion.choices().firstOrNull()?.message()?.content()?.orElse(null)?.trim()
+            ?.trim('"')
+            ?.ifBlank { null }
+            ?: throw ShimmerDeserializationException("No image prompt returned from OpenAI")
+
+        val imageResponse = client.images().generate(
+            ImageGenerateParams.builder()
+                .model(ImageModel.DALL_E_3)
+                .prompt(promptText)
+                .responseFormat(ImageGenerateParams.ResponseFormat.B64_JSON)
+                .size(ImageGenerateParams.Size._1024X1024)
+                .build()
+        )
+
+        val imageData = imageResponse.data().firstOrNull()
+            ?: throw ShimmerDeserializationException("No image data returned from OpenAI")
+
+        val base64 = imageData.b64Json().orElse(null)
+            ?: throw ShimmerDeserializationException("No base64 image data returned from OpenAI")
+
+        return ImageResult(
+            base64 = base64,
+            prompt = promptText,
+            revisedPrompt = imageData.revisedPrompt().orElse("")
+        )
+    }
+
+    private fun buildImagePromptMessages(context: PromptContext): MutableList<ChatCompletionMessageParam> {
+        val promptMessages = buildMessageList(context, buildUserPrompt(context))
+        val instruction = "Generate a vivid DALL-E prompt for this exact RPG scene context. " +
+            "Return only the prompt text, no JSON, no markdown, no commentary."
+        promptMessages.add(
+            ChatCompletionMessageParam.ofUser(
+                ChatCompletionUserMessageParam.builder().content(instruction).build()
+            )
+        )
+        return promptMessages
     }
 
     private fun appendToolResult(

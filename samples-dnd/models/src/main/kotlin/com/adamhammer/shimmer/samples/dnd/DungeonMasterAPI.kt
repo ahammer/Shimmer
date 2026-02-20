@@ -5,6 +5,7 @@ import com.adamhammer.shimmer.samples.dnd.model.ActionResult
 import com.adamhammer.shimmer.samples.dnd.model.BackstoryResult
 import com.adamhammer.shimmer.samples.dnd.model.CharacterConcept
 import com.adamhammer.shimmer.samples.dnd.model.SceneDescription
+import com.adamhammer.shimmer.model.ImageResult
 import java.util.concurrent.Future
 
 /**
@@ -18,11 +19,10 @@ interface DungeonMasterAPI {
         description = "Describe the current scene to the adventuring party. Style: Dark Fantasy / BBS RPG. " +
                 "Be vivid and atmospheric. Include sensory details — sights, sounds, smells. Address the party as a group. " +
                 "Suggest possible actions for the party members in the style of a text adventure game. " +
-                "Include a cool BBS-style ASCII art illustration (5-10 lines) of the scene using block characters (█ ▓ ▒ ░). " +
                 "NEVER repeat a previous scene description — always advance the narrative."
     )
     @AiResponse(
-        description = "A vivid scene description with BBS-style ASCII art and suggested actions",
+        description = "A vivid scene description with suggested actions",
         responseClass = SceneDescription::class
     )
     @Memorize(label = "Last scene description")
@@ -137,7 +137,6 @@ interface DungeonMasterAPI {
                 "describe how the environment reacts to the party's collective actions, " +
                 "and set the stage for the next round. Mention each character by name. " +
                 "Build tension, advance the story, and hint at what lies ahead. " +
-                "Include a cool BBS-style ASCII art illustration (5-10 lines) of the evolving scene using block characters (█ ▓ ▒ ░). " +
                 "CRITICAL: You are a great DM. Advance the PLOT every round. " +
                 "Introduce new NPCs, threats, discoveries, or twists. " +
                 "If players are repeating the same actions, the world should react — " +
@@ -146,9 +145,21 @@ interface DungeonMasterAPI {
                 "NEVER repeat previous scene descriptions verbatim."
     )
     @AiResponse(
-        description = "A summary advancing the plot, with ASCII art and new suggested actions",
+        description = "A summary advancing the plot and new suggested actions",
         responseClass = SceneDescription::class
     )
     @Memorize(label = "Last round summary")
     fun narrateRoundSummary(): Future<SceneDescription>
+
+    @AiOperation(
+        summary = "Generate Scene Image",
+        description = "Generate a cinematic image prompt for the current D&D scene using the latest world state, " +
+                "recent actions, and round summary. Focus on environment, mood, lighting, and key characters. " +
+                "Keep it consistent with the current setting and tone."
+    )
+    @AiResponse(
+        description = "A generated image for the current scene",
+        responseClass = ImageResult::class
+    )
+    fun generateSceneImage(): Future<ImageResult>
 }

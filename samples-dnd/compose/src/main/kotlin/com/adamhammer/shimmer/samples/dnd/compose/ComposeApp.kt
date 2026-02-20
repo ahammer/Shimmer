@@ -1,6 +1,7 @@
 package com.adamhammer.shimmer.samples.dnd.compose
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,8 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
+import org.jetbrains.skia.Image as SkiaImage
+import java.util.Base64
 
 @Composable
 fun ShimmerDndApp() {
@@ -132,6 +137,7 @@ private fun SetupScreen(controller: ComposeGameController) {
 private fun PlayingScreen(controller: ComposeGameController) {
     val world = controller.world
     val scene = controller.currentScene
+    val sceneImage = controller.currentImage
     val timelineState = rememberLazyListState()
 
     LaunchedEffect(controller.timeline.size) {
@@ -175,13 +181,15 @@ private fun PlayingScreen(controller: ComposeGameController) {
                 Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
                     Text("Current Scene", style = MaterialTheme.typography.h6)
                     Text(world.location.name, style = MaterialTheme.typography.subtitle1)
-                    if (scene.asciiArt.isNotBlank()) {
+                    val imageBitmap = sceneImage?.base64?.let { decodeBase64Image(it) }
+                    if (imageBitmap != null) {
                         Spacer(Modifier.height(8.dp))
                         Surface(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                scene.asciiArt,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(8.dp)
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = "Current scene image",
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -334,5 +342,14 @@ private fun StoryEventCard(event: StoryEvent) {
             }
             Text(event.details, style = MaterialTheme.typography.body2)
         }
+    }
+}
+
+private fun decodeBase64Image(base64Data: String): ImageBitmap? {
+    return try {
+        val bytes = Base64.getDecoder().decode(base64Data)
+        SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
+    } catch (_: Exception) {
+        null
     }
 }

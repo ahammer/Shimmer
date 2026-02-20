@@ -178,11 +178,6 @@ data class WhisperMessage(
 @Serializable
 @AiSchema(title = "SceneDescription", description = "A vivid description of the current scene")
 data class SceneDescription(
-    @field:AiSchema(
-        description = "A cool BBS-style ASCII art illustration (5-10 lines, " +
-            "using block characters like █ ▓ ▒ ░). Evocative, not detailed."
-    )
-    val asciiArt: String = "",
     @field:AiSchema(description = "An atmospheric description of what the party sees, hears, and smells")
     val narrative: String = "",
     @field:AiSchema(description = "Suggested actions the party could take")

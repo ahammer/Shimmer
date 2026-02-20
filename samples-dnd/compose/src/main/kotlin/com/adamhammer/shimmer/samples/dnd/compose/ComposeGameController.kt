@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.adamhammer.shimmer.adapters.OpenAiAdapter
+import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.CharacterUtils
 import com.adamhammer.shimmer.samples.dnd.DungeonMasterAPI
 import com.adamhammer.shimmer.samples.dnd.api.GameEventListener
@@ -74,6 +75,9 @@ class ComposeGameController(private val uiScope: CoroutineScope) : GameEventList
         private set
 
     var currentScene by mutableStateOf(SceneDescription())
+        private set
+
+    var currentImage by mutableStateOf<ImageResult?>(null)
         private set
 
     var currentRound by mutableStateOf(0)
@@ -204,7 +208,14 @@ class ComposeGameController(private val uiScope: CoroutineScope) : GameEventList
     override fun onSceneDescription(scene: SceneDescription) {
         uiScope.launch {
             currentScene = scene
+            currentImage = null
             appendEvent(StoryEventType.SCENE, world.location.name, scene.narrative)
+        }
+    }
+
+    override fun onImageGenerated(image: ImageResult) {
+        uiScope.launch {
+            currentImage = image
         }
     }
 
@@ -234,6 +245,7 @@ class ComposeGameController(private val uiScope: CoroutineScope) : GameEventList
         uiScope.launch {
             this@ComposeGameController.world = world
             currentScene = summary
+            currentImage = null
             latestSummary = summary.narrative
             refreshStorySignals(world)
             appendEvent(

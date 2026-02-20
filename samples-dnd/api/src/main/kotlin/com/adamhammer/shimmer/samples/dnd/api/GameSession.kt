@@ -8,6 +8,7 @@ import com.adamhammer.shimmer.agents.AiDecision
 import com.adamhammer.shimmer.samples.dnd.*
 import com.adamhammer.shimmer.samples.dnd.model.*
 import com.adamhammer.shimmer.shimmer
+import kotlin.concurrent.thread
 import kotlin.random.Random
 
 class GameSession(
@@ -50,6 +51,7 @@ class GameSession(
         aiAgents = buildAiAgents(world)
 
         listener.onSceneDescription(openingScene)
+        requestSceneImage()
 
         runGameLoop()
     }
@@ -146,6 +148,7 @@ class GameSession(
 
             val summary = dm.narrateRoundSummary().get()
             listener.onRoundSummary(summary, world)
+            requestSceneImage()
         }
 
         listener.onGameOver(world)
@@ -575,6 +578,16 @@ class GameSession(
 
         return stepResult.take(200).ifBlank {
             "$characterName looks around cautiously."
+        }
+    }
+
+    private fun requestSceneImage() {
+        thread(isDaemon = true, name = "scene-image-generator") {
+            try {
+                val image = dm.generateSceneImage().get()
+                listener.onImageGenerated(image)
+            } catch (_: Exception) {
+            }
         }
     }
 }

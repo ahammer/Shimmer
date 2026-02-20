@@ -3,6 +3,7 @@ package com.adamhammer.shimmer.samples.dnd.cli
 import com.adamhammer.shimmer.adapters.OpenAiAdapter
 import com.adamhammer.shimmer.debug.DebugAdapter
 import com.adamhammer.shimmer.debug.DebugSession
+import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.*
 import com.adamhammer.shimmer.samples.dnd.api.*
 import com.adamhammer.shimmer.samples.dnd.model.*
@@ -36,10 +37,6 @@ class CliGameListener : GameEventListener {
     override fun onSceneDescription(scene: SceneDescription) {
         println()
         println("═══ Scene ═══")
-        if (scene.asciiArt.isNotBlank()) {
-            println(scene.asciiArt)
-            println()
-        }
         println(scene.narrative)
         if (scene.availableActions.isNotEmpty()) {
             println()
@@ -65,8 +62,11 @@ class CliGameListener : GameEventListener {
 
     override fun onRoundSummary(summary: SceneDescription, world: World) {
         println("─── End of Round ${world.round} ─────────────────────")
-        if (summary.asciiArt.isNotBlank()) println(summary.asciiArt)
         println(summary.narrative)
+    }
+
+    override fun onImageGenerated(image: ImageResult) {
+        println("  🖼 Scene image generated")
     }
 
     override fun onGameOver(world: World) {

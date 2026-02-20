@@ -1,5 +1,6 @@
 package com.adamhammer.shimmer.samples.dnd.api
 
+import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.model.*
 
 interface GameEventListener {
@@ -16,6 +17,7 @@ interface GameEventListener {
     }
     fun onRoundStarted(round: Int, world: World) {}
     fun onSceneDescription(scene: SceneDescription)
+    fun onImageGenerated(image: ImageResult) {}
     fun onActionResult(result: ActionResult, world: World)
     fun onDiceRollRequested(character: Character, request: DiceRollRequest) {}
     fun onRoundSummary(summary: SceneDescription, world: World)
