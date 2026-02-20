@@ -37,8 +37,19 @@ data class AiDecision(
     fun argsMap(): Map<String, String> = args.associate { it.name to it.value }
 }
 
-fun <T : Any> DecidingAgentAPI.decide(shimmerInstance: ShimmerInstance<T>): Future<AiDecision> {
-    val schema = shimmerInstance.klass.toJsonClassMetadataString()
+fun <T : Any> DecidingAgentAPI.decide(
+    shimmerInstance: ShimmerInstance<T>,
+    excludedMethods: Set<String> = emptySet()
+): Future<AiDecision> {
+    var schema = shimmerInstance.klass.toJsonClassMetadataString()
+    if (excludedMethods.isNotEmpty()) {
+        excludedMethods.forEach { methodName ->
+            schema = schema.replace(
+                Regex("""\{\s*"name"\s*:\s*"${Regex.escape(methodName)}"[\s\S]*?\}\s*,?"""),
+                ""
+            )
+        }
+    }
     return decideNextAction(schema)
 }
 
@@ -51,8 +62,7 @@ interface DecidingAgentAPI {
         description = "Examine the available methods listed in the provided schema and choose " +
             "which one to call next, along with its arguments. " +
             "IMPORTANT: The 'method' field in your response MUST be one of the method names " +
-            "from the schema in 'currentObject' (e.g. 'observeSituation', 'decideAction'). " +
-            "Do NOT return 'decideNextAction' — that is this method, not a valid choice."
+            "from the schema in 'currentObject'."
     )
     @AiResponse(
         description = "A decision selecting one of the methods from the provided schema, with arguments.",

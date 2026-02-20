@@ -39,6 +39,7 @@ interface AutonomousAIApi {
     @AiOperation(description = "Deliver the result")
     @AiResponse(description = "The final result/communication", responseClass = String::class)
     @Memorize(label = "act")
+    @Terminal
     fun act(): Future<String>
 }
 
@@ -54,12 +55,69 @@ class AutonomousAgent<T : Any>(
     private val dispatcher = AgentDispatcher(apiInstance)
 
     fun step(): String {
-        val decision = decider.decide(apiInstance).get()
-        val result = dispatcher.dispatch(decision)
-        return result?.toString() ?: ""
+        return stepDetailed().value?.toString() ?: ""
+    }
+
+    fun stepDetailed(excludedMethods: Set<String> = emptySet()): AgentDispatcher.DispatchResult {
+        val decision = decider.decide(apiInstance, excludedMethods).get()
+        return dispatcher.dispatchWithMetadata(decision)
     }
 
     suspend fun stepSuspend(): String = withContext(Dispatchers.IO) {
         step()
+    }
+
+    suspend fun stepDetailedSuspend(): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
+        stepDetailed()
+    }
+
+    fun run(maxSteps: Int): String {
+        return runDetailed(maxSteps).value?.toString() ?: ""
+    }
+
+    fun runDetailed(maxSteps: Int): AgentDispatcher.DispatchResult {
+        require(maxSteps > 0) { "maxSteps must be > 0" }
+
+        var lastResult = AgentDispatcher.DispatchResult(
+            methodName = "",
+            value = "",
+            isTerminal = false
+        )
+        repeat(maxSteps) {
+            val dispatchResult = stepDetailed()
+            lastResult = dispatchResult
+            if (dispatchResult.isTerminal) {
+                return dispatchResult
+            }
+        }
+
+        val fallbackTerminal = dispatcher.firstParameterlessTerminalMethodName()
+        if (fallbackTerminal != null) {
+            return dispatcher.dispatchWithMetadata(AiDecision(fallbackTerminal, emptyList()))
+        }
+
+        return lastResult
+    }
+
+    suspend fun runSuspend(maxSteps: Int): String = withContext(Dispatchers.IO) {
+        run(maxSteps)
+    }
+
+    suspend fun runDetailedSuspend(maxSteps: Int): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
+        runDetailed(maxSteps)
+    }
+
+    fun invoke(
+        methodName: String,
+        args: Map<String, String> = emptyMap()
+    ): AgentDispatcher.DispatchResult = dispatcher.dispatchWithMetadata(
+        AiDecision(method = methodName, argsMap = args)
+    )
+
+    suspend fun invokeSuspend(
+        methodName: String,
+        args: Map<String, String> = emptyMap()
+    ): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
+        invoke(methodName, args)
     }
 }

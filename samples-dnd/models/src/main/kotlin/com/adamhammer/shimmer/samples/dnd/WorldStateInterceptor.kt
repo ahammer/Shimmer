@@ -15,7 +15,9 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
     private val json = Json { prettyPrint = true }
 
     override fun intercept(context: PromptContext): PromptContext {
-        val worldJson = json.encodeToString(worldProvider())
+        val world = worldProvider()
+        val worldJson = json.encodeToString(world)
+        val lore = world.lore
         return context.copy(
             systemInstructions = context.systemInstructions + """
                 |
@@ -33,6 +35,8 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
                 |- NEVER repeat a previous scene description. Each round should feel different.
                 |- Build a coherent story arc with rising tension, climax, and resolution.
                 |- Use the action log below to track what has happened and avoid repetition.
+                |- Agents have an internal turn budget of 5 request-steps; reward clear planning and concise decisions.
+                |- Private whispers may occur between characters; treat them as valid tactical coordination.
                 |
                 |## Party Rules
                 |- Address characters by name when narrating their actions.
@@ -46,11 +50,21 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
                 |- HP changes should be reasonable: -1 to -5 for minor injuries, -5 to -10 for serious ones.
                 |- Healing should come from spells, potions, or rest — not arbitrary events.
                 |- Each character's backstory and personality should influence how the world reacts to them.
+                |- You may introduce NPCs dynamically using newNpcs and newNpcProfiles when appropriate.
                 |
                 |## Ability Score Reference
                 |- Modifier = (score - 10) / 2, rounded down
                 |- Proficiency bonus is added to proficient saves and skills
                 |- AC determines how hard a character is to hit
+                |
+                |## Campaign Lore Summary
+                |- Premise: ${lore.campaignPremise.ifBlank { "Not established yet." }}
+                |- Plot Hooks: ${lore.plotHooks.take(4).joinToString(" | ").ifBlank { "None yet" }}
+                |- Factions: ${lore.factions.take(4).joinToString(" | ").ifBlank { "None yet" }}
+                |- Key NPCs: ${lore.npcs.take(5).joinToString(" | ") { "${it.name} (${it.role})" }.ifBlank { "None yet" }}
+                |
+                |## Whisper Log (Recent)
+                |${world.whisperLog.takeLast(8).joinToString("\n") { "- R${it.round} ${it.from} -> ${it.to}: ${it.message}" }.ifBlank { "- None yet" }}
                 |
                 |```json
                 |$worldJson

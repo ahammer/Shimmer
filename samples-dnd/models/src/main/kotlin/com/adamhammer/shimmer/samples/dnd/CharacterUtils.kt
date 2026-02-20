@@ -66,7 +66,6 @@ object CharacterUtils {
         characterClass: String,
         abilityScores: AbilityScores,
         backstory: String,
-        isHuman: Boolean,
         aiSuggestedItems: List<String> = emptyList()
     ): Character {
         val conMod = abilityModifier(abilityScores.con)
@@ -93,7 +92,13 @@ object CharacterUtils {
             inventory = items,
             status = "healthy",
             backstory = backstory,
-            isHuman = isHuman
+            goals = listOf(
+                "Protect the party",
+                "Uncover the truth behind the current quest"
+            ),
+            relationships = emptyMap(),
+            emotionalState = "focused",
+            journal = emptyList()
         )
     }
 
@@ -136,7 +141,9 @@ object CharacterUtils {
         appendLine("  ${fmt("INT", scores.int)} | ${fmt("WIS", scores.wis)} | ${fmt("CHA", scores.cha)}")
         appendLine("  HP: ${c.hp}/${c.maxHp}  |  AC: ${c.ac}  |  Prof: +${c.proficiencyBonus}")
         appendLine("  Saves: ${c.savingThrows.joinToString()} | Skills: ${c.skills.joinToString()}")
-        appendLine("  Status: ${c.status}  |  ${if (c.isHuman) "Human Player" else "AI Companion"}")
+        appendLine("  Status: ${c.status}")
+        appendLine("  Emotion: ${c.emotionalState}")
+        if (c.goals.isNotEmpty()) appendLine("  Goals: ${c.goals.joinToString(" | ")}")
         appendLine("  Inventory: ${c.inventory.joinToString()}")
         if (c.backstory.isNotBlank()) {
             appendLine("  Backstory: ${c.backstory.take(120)}${if (c.backstory.length > 120) "..." else ""}")

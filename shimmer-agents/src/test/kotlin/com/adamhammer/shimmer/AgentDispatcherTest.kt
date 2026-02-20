@@ -56,4 +56,17 @@ class AgentDispatcherTest {
             assertEquals("$methodName-result", result)
         }
     }
+
+    @Test
+    fun `isTerminal identifies terminal methods`() {
+        val dispatcher = buildDispatcher("irrelevant")
+        assertFalse(dispatcher.isTerminal("analyze"))
+        assertTrue(dispatcher.isTerminal("act"))
+    }
+
+    @Test
+    fun `finds first parameterless terminal method`() {
+        val dispatcher = buildDispatcher("irrelevant")
+        assertEquals("act", dispatcher.firstParameterlessTerminalMethodName())
+    }
 }

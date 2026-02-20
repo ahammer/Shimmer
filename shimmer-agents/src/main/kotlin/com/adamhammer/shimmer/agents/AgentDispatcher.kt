@@ -20,6 +20,12 @@ import java.util.concurrent.Future
 class AgentDispatcher<T : Any>(
     private val shimmerInstance: ShimmerInstance<T>
 ) {
+    data class DispatchResult(
+        val methodName: String,
+        val value: Any?,
+        val isTerminal: Boolean
+    )
+
     private val methodMap: Map<String, Method> = shimmerInstance.klass.java.declaredMethods
         .associateBy { it.name }
 
@@ -32,7 +38,9 @@ class AgentDispatcher<T : Any>(
      * @return the result of the method invocation (unwrapped from Future if applicable)
      * @throws IllegalArgumentException if the method is not found or arguments cannot be resolved
      */
-    fun dispatch(decision: AiDecision): Any? {
+    fun dispatch(decision: AiDecision): Any? = dispatchWithMetadata(decision).value
+
+    fun dispatchWithMetadata(decision: AiDecision): DispatchResult {
         val method = methodMap[decision.method]
             ?: throw IllegalArgumentException(
                 "Unknown method '${decision.method}'. Available: ${methodMap.keys}"
@@ -46,8 +54,27 @@ class AgentDispatcher<T : Any>(
         }
 
         // Unwrap Future results
-        return if (result is Future<*>) result.get() else result
+        val value = if (result is Future<*>) result.get() else result
+        return DispatchResult(
+            methodName = method.name,
+            value = value,
+            isTerminal = method.isAnnotationPresent(Terminal::class.java)
+        )
     }
+
+    fun isTerminal(methodName: String): Boolean {
+        val method = methodMap[methodName]
+            ?: throw IllegalArgumentException(
+                "Unknown method '$methodName'. Available: ${methodMap.keys}"
+            )
+        return method.isAnnotationPresent(Terminal::class.java)
+    }
+
+    fun firstParameterlessTerminalMethodName(): String? = methodMap.values
+        .firstOrNull { method ->
+            method.parameterCount == 0 && method.isAnnotationPresent(Terminal::class.java)
+        }
+        ?.name
 
     private fun resolveArguments(method: Method, args: Map<String, String>): List<Any?> {
         checkParameterNames(method)

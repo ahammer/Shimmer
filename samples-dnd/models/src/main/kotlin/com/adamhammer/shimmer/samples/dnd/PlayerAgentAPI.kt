@@ -1,6 +1,7 @@
 package com.adamhammer.shimmer.samples.dnd
 
 import com.adamhammer.shimmer.annotations.*
+import com.adamhammer.shimmer.agents.Terminal
 import com.adamhammer.shimmer.samples.dnd.model.PlayerAction
 import java.util.concurrent.Future
 
@@ -26,8 +27,32 @@ interface PlayerAgentAPI {
     fun observeSituation(): Future<String>
 
     @AiOperation(
-        summary = "Decide Action",
-        description = "Based on your observations, decide what action your character takes. " +
+        summary = "Check Abilities",
+        description = "Review your current inventory, health, skills, class abilities, and known tactical options. " +
+            "Decide what actions are realistically available this turn. Call this at most ONCE per turn."
+    )
+    @AiResponse(
+        description = "A concise capability assessment for this turn",
+        responseClass = String::class
+    )
+    @Memorize(label = "Capability assessment")
+    fun checkAbilities(): Future<String>
+
+    @AiOperation(
+        summary = "Whisper Planning",
+        description = "Think about party coordination and decide whether to send a short whisper this turn. " +
+            "This step should only plan coordination; the actual whisper is sent via commitAction whisperTarget/whisperMessage. Call this at most ONCE per turn."
+    )
+    @AiResponse(
+        description = "A short tactical-social reflection for this turn",
+        responseClass = String::class
+    )
+    @Memorize(label = "Whisper planning")
+    fun whisper(): Future<String>
+
+    @AiOperation(
+        summary = "Commit Action",
+        description = "Based on your observations, capabilities, and team dynamics, commit to a final action for this turn. " +
                 "Stay in character — consider your backstory, personality, class abilities, " +
                 "and the needs of the party. Be decisive and specific. " +
                 "State your action in ONE short sentence as a player command " +
@@ -35,12 +60,15 @@ interface PlayerAgentAPI {
                 "Do NOT narrate what happens or describe the outcome — that is the DM's job. " +
                 "IMPORTANT: Do NOT repeat an action you already took in a previous round. " +
                 "Check the action log — if you did something last round, try something DIFFERENT. " +
-                "React to what has changed in the world. Be creative and advance the story."
+                "React to what has changed in the world. Be creative and advance the story. " +
+                "You may optionally provide journalEntry, emotionalUpdate, goalUpdate, whisperTarget, and whisperMessage " +
+                "to persist your own internal state and coordinate with teammates."
     )
     @AiResponse(
         description = "A short, specific player action (1-2 sentences max), not narration",
         responseClass = PlayerAction::class
     )
     @Memorize(label = "Chosen action")
-    fun decideAction(): Future<PlayerAction>
+    @Terminal
+    fun commitAction(): Future<PlayerAction>
 }

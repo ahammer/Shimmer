@@ -163,4 +163,42 @@ class AutonomousAgentTest {
         assertTrue(apiInstance.memory.containsKey("analyze"),
             "Memory should contain 'analyze' after analyze call. Actual: ${apiInstance.memory}")
     }
+
+    @Test
+    fun `run stops early when terminal method is reached`() {
+        val agent = buildAutonomousAgent(
+            decisions = listOf(
+                AiDecision("analyze", emptyMap<String, String>()),
+                AiDecision("act", emptyMap<String, String>()),
+                AiDecision("plan", emptyMap<String, String>())
+            ),
+            apiResponses = listOf("analysis", "acted")
+        )
+
+        val result = agent.run(maxSteps = 5)
+        assertEquals("acted", result)
+    }
+
+    @Test
+    fun `run triggers parameterless terminal fallback when budget is exhausted`() {
+        val agent = buildAutonomousAgent(
+            decisions = listOf(AiDecision("analyze", emptyMap<String, String>())),
+            apiResponses = listOf("analysis", "fallback-act")
+        )
+
+        val result = agent.run(maxSteps = 1)
+        assertEquals("fallback-act", result)
+    }
+
+    @Test
+    fun `run requires positive maxSteps`() {
+        val agent = buildAutonomousAgent(
+            decisions = listOf(AiDecision("act", emptyMap<String, String>())),
+            apiResponses = listOf("acted")
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            agent.run(maxSteps = 0)
+        }
+    }
 }

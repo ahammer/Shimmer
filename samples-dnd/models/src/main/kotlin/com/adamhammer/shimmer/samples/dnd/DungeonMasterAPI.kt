@@ -15,14 +15,14 @@ interface DungeonMasterAPI {
 
     @AiOperation(
         summary = "Describe Scene",
-        description = "Describe the current scene to the adventuring party. Be vivid and atmospheric. " +
-                "Include sensory details — sights, sounds, smells. Address the party as a group. " +
-                "Suggest possible actions for the party members. " +
-                "Include a small ASCII art illustration (3-6 lines) of the scene. " +
+        description = "Describe the current scene to the adventuring party. Style: Dark Fantasy / BBS RPG. " +
+                "Be vivid and atmospheric. Include sensory details — sights, sounds, smells. Address the party as a group. " +
+                "Suggest possible actions for the party members in the style of a text adventure game. " +
+                "Include a cool BBS-style ASCII art illustration (5-10 lines) of the scene using block characters (█ ▓ ▒ ░). " +
                 "NEVER repeat a previous scene description — always advance the narrative."
     )
     @AiResponse(
-        description = "A vivid scene description with ASCII art and suggested actions",
+        description = "A vivid scene description with BBS-style ASCII art and suggested actions",
         responseClass = SceneDescription::class
     )
     @Memorize(label = "Last scene description")
@@ -37,9 +37,12 @@ interface DungeonMasterAPI {
                 "(calculated from the character's stats + proficiency if applicable). " +
                 "DO NOT resolve the action fully if a dice roll is needed — instead describe the attempt " +
                 "and request the roll. The action will be resolved after the roll. " +
+                "When you include diceRollRequest, describe only the attempt and immediate setup, not the final success/failure outcome. " +
+                "Do not apply HP, inventory, quest, or status consequences until resolveRoll. " +
                 "For actions that don't need a roll, resolve them directly with appropriate consequences: " +
                 "HP changes (keep them small, -1 to -5 for minor, -5 to -10 for serious), " +
                 "item gains/losses, location changes, quest updates. " +
+                "You may introduce NPCs dynamically using newNpcs and newNpcProfiles when the story naturally warrants it. " +
                 "Be creative but fair. The world should feel alive and reactive."
     )
     @AiResponse(
@@ -134,7 +137,7 @@ interface DungeonMasterAPI {
                 "describe how the environment reacts to the party's collective actions, " +
                 "and set the stage for the next round. Mention each character by name. " +
                 "Build tension, advance the story, and hint at what lies ahead. " +
-                "Include a small ASCII art illustration (3-6 lines) of the evolving scene. " +
+                "Include a cool BBS-style ASCII art illustration (5-10 lines) of the evolving scene using block characters (█ ▓ ▒ ░). " +
                 "CRITICAL: You are a great DM. Advance the PLOT every round. " +
                 "Introduce new NPCs, threats, discoveries, or twists. " +
                 "If players are repeating the same actions, the world should react — " +

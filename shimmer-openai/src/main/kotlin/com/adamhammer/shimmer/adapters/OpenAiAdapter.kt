@@ -334,29 +334,25 @@ class OpenAiAdapter(
     private fun ToolDefinition.toOpenAiTool(): ChatCompletionTool {
         val schemaElement = json.parseToJsonElement(inputSchema).jsonObject
 
-        val properties = schemaElement["properties"]?.jsonObject?.entries?.associate { (key, value) ->
-            key to value
-        } ?: emptyMap()
+        val schemaNative = jsonElementToNative(schemaElement)
+        val schemaMap = schemaNative as? Map<*, *> ?: emptyMap<String, Any?>()
+        val parametersBuilder = FunctionParameters.builder()
+        schemaMap.forEach { (key, value) ->
+            if (key != null) {
+                parametersBuilder.putAdditionalProperty(key.toString(), com.openai.core.JsonValue.from(value))
+            }
+        }
 
-        val required = schemaElement["required"]?.let { req ->
-            val arr = req as? kotlinx.serialization.json.JsonArray ?: return@let emptyList()
-            arr.mapNotNull { (it as? JsonPrimitive)?.content }
-        } ?: emptyList()
+        if (!schemaMap.containsKey("type")) {
+            parametersBuilder.putAdditionalProperty("type", com.openai.core.JsonValue.from("object"))
+        }
 
         return ChatCompletionTool.builder()
             .function(
                 FunctionDefinition.builder()
                     .name(name)
                     .description(description)
-                    .parameters(
-                        FunctionParameters.builder()
-                            .putAdditionalProperty("type", com.openai.core.JsonValue.from("object"))
-                            .putAdditionalProperty("properties", com.openai.core.JsonValue.from(
-                                properties.entries.associate { (k, v) -> k to json.parseToJsonElement(v.toString()) }
-                            ))
-                            .putAdditionalProperty("required", com.openai.core.JsonValue.from(required))
-                            .build()
-                    )
+                    .parameters(parametersBuilder.build())
                     .build()
             )
             .build()

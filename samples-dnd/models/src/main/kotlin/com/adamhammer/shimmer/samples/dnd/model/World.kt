@@ -53,8 +53,14 @@ data class Character(
     val status: String = "healthy",
     @field:AiSchema(description = "The character's backstory and personality")
     val backstory: String = "",
-    @field:AiSchema(description = "Whether this character is controlled by a human player")
-    val isHuman: Boolean = true
+    @field:AiSchema(description = "Current personal goals, both short and long term")
+    val goals: List<String> = emptyList(),
+    @field:AiSchema(description = "Relationship stances toward other characters and notable NPCs")
+    val relationships: Map<String, String> = emptyMap(),
+    @field:AiSchema(description = "Current emotional state and motivation")
+    val emotionalState: String = "focused",
+    @field:AiSchema(description = "Personal journal entries authored by this character")
+    val journal: List<String> = emptyList()
 )
 
 // ── World Model ─────────────────────────────────────────────────────────────
@@ -83,10 +89,88 @@ data class World(
     val location: Location = Location(),
     @field:AiSchema(description = "The current round number")
     val round: Int = 0,
+    @field:AiSchema(description = "Persistent world lore and backstory scaffolding")
+    val lore: WorldLore = WorldLore(),
     @field:AiSchema(description = "Active quests and objectives")
     val questLog: List<String> = emptyList(),
     @field:AiSchema(description = "Log of recent actions and events (most recent last)")
-    val actionLog: List<String> = emptyList()
+    val actionLog: List<String> = emptyList(),
+    @field:AiSchema(description = "Private whispers between party members")
+    val whisperLog: List<WhisperMessage> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "WorldLore", description = "Background world scaffolding created before the game starts")
+data class WorldLore(
+    @field:AiSchema(description = "High-level campaign premise")
+    val campaignPremise: String = "",
+    @field:AiSchema(description = "Known locations and their role in the story")
+    val locations: List<LoreLocation> = emptyList(),
+    @field:AiSchema(description = "NPC registry with motivations")
+    val npcs: List<NpcProfile> = emptyList(),
+    @field:AiSchema(description = "Plot hooks to seed early turns")
+    val plotHooks: List<String> = emptyList(),
+    @field:AiSchema(description = "Factions and influential groups in the setting")
+    val factions: List<String> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "LoreLocation", description = "A location node used in world backstory planning")
+data class LoreLocation(
+    @field:AiSchema(description = "Location name")
+    val name: String = "",
+    @field:AiSchema(description = "Short location description")
+    val description: String = "",
+    @field:AiSchema(description = "Connected location names")
+    val connections: List<String> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "NpcProfile", description = "An NPC with role and motivation")
+data class NpcProfile(
+    @field:AiSchema(description = "NPC name")
+    val name: String = "",
+    @field:AiSchema(description = "Narrative role")
+    val role: String = "",
+    @field:AiSchema(description = "Current motivation")
+    val motivation: String = "",
+    @field:AiSchema(description = "Current location")
+    val currentLocation: String = ""
+)
+
+@Serializable
+@AiSchema(title = "NpcRegistryResult", description = "Structured NPC registry generated during world setup")
+data class NpcRegistryResult(
+    @field:AiSchema(description = "NPC profiles created for this campaign")
+    val npcs: List<NpcProfile> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "WorldBuildResult", description = "Committed world setup used to start the game")
+data class WorldBuildResult(
+    @field:AiSchema(description = "Campaign premise for this run")
+    val campaignPremise: String = "",
+    @field:AiSchema(description = "Pre-game world lore")
+    val lore: WorldLore = WorldLore(),
+    @field:AiSchema(description = "Opening scene after world setup")
+    val openingScene: SceneDescription = SceneDescription(),
+    @field:AiSchema(description = "Suggested starting location")
+    val startingLocation: Location = Location(),
+    @field:AiSchema(description = "Initial quest hooks")
+    val initialQuests: List<String> = emptyList()
+)
+
+@Serializable
+@AiSchema(title = "WhisperMessage", description = "A private in-character message between party members")
+data class WhisperMessage(
+    @field:AiSchema(description = "Character sending the whisper")
+    val from: String = "",
+    @field:AiSchema(description = "Character receiving the whisper")
+    val to: String = "",
+    @field:AiSchema(description = "Short private message content")
+    val message: String = "",
+    @field:AiSchema(description = "Round when this whisper occurred")
+    val round: Int = 0
 )
 
 // ── AI Response Types ───────────────────────────────────────────────────────
@@ -95,8 +179,8 @@ data class World(
 @AiSchema(title = "SceneDescription", description = "A vivid description of the current scene")
 data class SceneDescription(
     @field:AiSchema(
-        description = "A small ASCII art illustration of the scene (3-6 lines, " +
-            "using box-drawing and simple characters). Evocative, not detailed."
+        description = "A cool BBS-style ASCII art illustration (5-10 lines, " +
+            "using block characters like █ ▓ ▒ ░). Evocative, not detailed."
     )
     val asciiArt: String = "",
     @field:AiSchema(description = "An atmospheric description of what the party sees, hears, and smells")
@@ -141,6 +225,8 @@ data class ActionResult(
     val newExits: List<String> = emptyList(),
     @field:AiSchema(description = "If the party moved, NPCs at the new location")
     val newNpcs: List<String> = emptyList(),
+    @field:AiSchema(description = "Optional full NPC profiles introduced by this action")
+    val newNpcProfiles: List<NpcProfile> = emptyList(),
     @field:AiSchema(description = "New quest or objective to add, or empty if none")
     val questUpdate: String = "",
     @field:AiSchema(description = "New status effect for the character, or empty to keep current")
@@ -183,5 +269,15 @@ data class PlayerAction(
     )
     val action: String = "",
     @field:AiSchema(description = "Brief internal reasoning for why this action was chosen")
-    val reasoning: String = ""
+    val reasoning: String = "",
+    @field:AiSchema(description = "Optional journal entry to persist this turn")
+    val journalEntry: String = "",
+    @field:AiSchema(description = "Optional updated emotional state for the character")
+    val emotionalUpdate: String = "",
+    @field:AiSchema(description = "Optional new or revised personal goal")
+    val goalUpdate: String = "",
+    @field:AiSchema(description = "Optional character to whisper to this turn")
+    val whisperTarget: String = "",
+    @field:AiSchema(description = "Optional whisper message sent to whisperTarget")
+    val whisperMessage: String = ""
 )

@@ -33,6 +33,18 @@ class CharacterInterceptor(private val characterProvider: () -> Character) : Int
                 |## Inventory
                 |${c.inventory.joinToString(", ")}
                 |
+                |## Goals
+                |${c.goals.joinToString(" | ").ifBlank { "Survive and support the party." }}
+                |
+                |## Relationships
+                |${c.relationships.entries.joinToString(" | ") { "${it.key}: ${it.value}" }.ifBlank { "No strong stances yet." }}
+                |
+                |## Emotional State
+                |${c.emotionalState}
+                |
+                |## Journal (Recent)
+                |${c.journal.takeLast(6).joinToString("\n") { "- $it" }.ifBlank { "- No entries yet." }}
+                |
                 |## Backstory
                 |${c.backstory}
                 |
@@ -44,7 +56,13 @@ class CharacterInterceptor(private val characterProvider: () -> Character) : Int
                 |- Consider your inventory and equipment in your decisions.
                 |- NEVER repeat the same action two rounds in a row.
                 |- React to what changed since your last action.
+                |- Keep your goals and emotional state coherent as events evolve.
                 |- Explore, interact with NPCs, investigate, or fight — vary your approach.
+                |
+                |## Step Policy
+                |- Observation has already been performed for this turn.
+                |- You MAY call checkAbilities or whisper ONCE per turn.
+                |- You MUST end your turn with commitAction.
                 |Status: ${c.status}
             """.trimMargin()
         )
