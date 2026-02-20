@@ -10,6 +10,21 @@ import com.adamhammer.shimmer.samples.dnd.model.Character
  */
 class CharacterInterceptor(private val characterProvider: () -> Character) : Interceptor {
 
+    private fun classInstincts(characterClass: String): String = when (characterClass.lowercase()) {
+        "rogue" -> "You prefer scouting, stealth, and cunning. Check for traps, pick locks, sneak ahead. Act before others notice."
+        "cleric" -> "You protect and heal. Check on wounded allies first. Use divine knowledge for mysteries and undead threats."
+        "bard" -> "You inspire and negotiate. Talk to NPCs, use performance, gather information socially. Charm before combat."
+        "fighter" -> "You lead the charge. Position for combat, protect the vulnerable, test physical obstacles. Action over hesitation."
+        "wizard", "sorcerer" -> "You analyze and exploit. Study magical phenomena, identify arcane threats, use spells strategically. Knowledge is power."
+        "ranger" -> "You track and scout. Read the environment, identify creatures, find paths. The wilderness speaks to you."
+        "paladin" -> "You uphold your oath. Protect the innocent, confront evil directly, inspire through action. Duty first."
+        "warlock" -> "You bargain and manipulate. Use your patron's gifts creatively, seek hidden knowledge, embrace the shadows."
+        "druid" -> "You commune with nature. Read the land, speak with animals, shape the elements. Balance above all."
+        "monk" -> "You observe and strike. Move swiftly, exploit openings, remain disciplined. Patience yields precision."
+        "barbarian" -> "You charge in fearlessly. Smash obstacles, intimidate foes, protect allies through sheer force."
+        else -> "Use your unique abilities. Lean into what makes your class special — don't default to generic actions."
+    }
+
     override fun intercept(context: PromptContext): PromptContext {
         val c = characterProvider()
         val scores = c.abilityScores
@@ -58,6 +73,9 @@ class CharacterInterceptor(private val characterProvider: () -> Character) : Int
                 |- React to what changed since your last action.
                 |- Keep your goals and emotional state coherent as events evolve.
                 |- Explore, interact with NPCs, investigate, or fight — vary your approach.
+                |
+                |## Class Instincts (${c.characterClass})
+                |- ${classInstincts(c.characterClass)}
                 |
                 |## Step Policy
                 |- Observation has already been performed for this turn.

@@ -1,7 +1,7 @@
 package com.adamhammer.shimmer.samples.dnd
 
 import com.adamhammer.shimmer.annotations.*
-import com.adamhammer.shimmer.agents.Terminal
+import com.adamhammer.shimmer.annotations.Terminal
 import com.adamhammer.shimmer.samples.dnd.model.PlayerAction
 import java.util.concurrent.Future
 

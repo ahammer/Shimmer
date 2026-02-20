@@ -16,6 +16,7 @@ import com.adamhammer.shimmer.annotations.AiOperation
 import com.adamhammer.shimmer.annotations.AiParameter
 import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.AiSchema
+import com.adamhammer.shimmer.annotations.Terminal
 import com.adamhammer.shimmer.model.MethodDescriptor
 import com.adamhammer.shimmer.model.ToolDefinition
 
@@ -170,9 +171,10 @@ fun Any?.toJsonElement(): JsonElement = when (this) {
 
 fun Any?.toJsonString(): String = json.encodeToString(toJsonElement())
 
-fun KClass<*>.toJsonClassMetadata(): JsonObject = buildJsonObject {
+fun KClass<*>.toJsonClassMetadata(excludedMethods: Set<String> = emptySet()): JsonObject = buildJsonObject {
     put("Agent Name", simpleName ?: "Unknown")
-    put("methods", JsonArray(declaredFunctions.map { method ->
+    val filteredMethods = declaredFunctions.filter { it.name !in excludedMethods }
+    put("methods", JsonArray(filteredMethods.map { method ->
         buildJsonObject {
             put("name", method.name)
             method.findAnnotation<AiOperation>()?.let {
@@ -182,17 +184,31 @@ fun KClass<*>.toJsonClassMetadata(): JsonObject = buildJsonObject {
                     else -> {}
                 }
             }
-            put("parameters", JsonArray(method.parameters.mapNotNull { param ->
+            if (method.findAnnotation<Terminal>() != null) {
+                put("terminal", true)
+            }
+            val responseClass = method.findAnnotation<AiResponse>()?.responseClass
+                ?.takeIf { it != Unit::class }
+            if (responseClass != null) {
+                put("returnType", responseClass.simpleName ?: "Unknown")
+            }
+            val params = method.parameters.mapNotNull { param ->
                 param.findAnnotation<AiParameter>()?.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                    buildJsonObject { put("description", desc) }
+                    buildJsonObject {
+                        put("name", param.name ?: "arg")
+                        put("description", desc)
+                    }
                 }
-            }))
+            }
+            if (params.isNotEmpty()) {
+                put("parameters", JsonArray(params))
+            }
         }
     }))
 }
 
-fun KClass<*>.toJsonClassMetadataString(): String =
-    json.encodeToString(toJsonClassMetadata())
+fun KClass<*>.toJsonClassMetadataString(excludedMethods: Set<String> = emptySet()): String =
+    json.encodeToString(toJsonClassMetadata(excludedMethods))
 
 /**
  * Converts an annotated interface method into a provider-agnostic [ToolDefinition].

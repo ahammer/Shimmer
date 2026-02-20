@@ -1,5 +1,4 @@
 package com.adamhammer.shimmer.agents
 
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class Terminal
+@Deprecated("Moved to com.adamhammer.shimmer.annotations.Terminal", ReplaceWith("com.adamhammer.shimmer.annotations.Terminal"))
+typealias Terminal = com.adamhammer.shimmer.annotations.Terminal

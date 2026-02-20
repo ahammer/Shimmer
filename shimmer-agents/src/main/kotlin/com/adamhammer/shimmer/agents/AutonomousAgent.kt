@@ -6,6 +6,7 @@ import com.adamhammer.shimmer.annotations.AiParameter
 import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.AiSchema
 import com.adamhammer.shimmer.annotations.Memorize
+import com.adamhammer.shimmer.annotations.Terminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Future

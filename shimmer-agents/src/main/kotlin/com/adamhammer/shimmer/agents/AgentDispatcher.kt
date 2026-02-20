@@ -1,6 +1,7 @@
 package com.adamhammer.shimmer.agents
 
 import com.adamhammer.shimmer.ShimmerInstance
+import com.adamhammer.shimmer.annotations.Terminal
 import java.lang.reflect.Method
 import java.util.concurrent.Future
 

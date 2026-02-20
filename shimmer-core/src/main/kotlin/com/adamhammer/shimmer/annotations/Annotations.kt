@@ -32,3 +32,7 @@ annotation class AiSchema(
     val title: String = "",
     val description: String = ""
 )
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class Terminal

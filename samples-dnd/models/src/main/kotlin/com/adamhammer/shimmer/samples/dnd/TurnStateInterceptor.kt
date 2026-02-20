@@ -7,7 +7,8 @@ data class TurnState(
     val phase: String = "PLAN",
     val stepsUsed: Int = 0,
     val stepsBudget: Int = 0,
-    val recentSteps: List<String> = emptyList()
+    val recentSteps: List<String> = emptyList(),
+    val previousRoundActions: List<String> = emptyList()
 )
 
 class TurnStateInterceptor(
@@ -17,6 +18,12 @@ class TurnStateInterceptor(
     override fun intercept(context: PromptContext): PromptContext {
         val state = turnStateProvider()
         val stepsRemaining = (state.stepsBudget - state.stepsUsed).coerceAtLeast(0)
+        val bannedSection = if (state.previousRoundActions.isNotEmpty()) {
+            """|
+                |## BANNED — Do NOT Repeat These Actions
+                |You already did these in recent rounds. Pick something DIFFERENT:
+                |${state.previousRoundActions.joinToString("\n") { "- $it" }}"""
+        } else ""
         return context.copy(
             systemInstructions = context.systemInstructions + """
                 |
@@ -25,6 +32,7 @@ class TurnStateInterceptor(
                 |- Steps used: ${state.stepsUsed}/${state.stepsBudget}
                 |- Steps remaining: $stepsRemaining
                 |- Observation has already been collected for this turn.
+                $bannedSection
                 |
                 |## Steps So Far
                 |${state.recentSteps.takeLast(8).joinToString("\n") { "- $it" }.ifBlank { "- No steps yet." }}

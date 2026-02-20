@@ -24,6 +24,7 @@ class GameSession(
     private lateinit var aiAgents: Map<String, AutonomousAgent<PlayerAgentAPI>>
     private val turnStates: MutableMap<String, TurnState> = mutableMapOf()
     private val turnHistories: MutableMap<String, MutableList<String>> = mutableMapOf()
+    private val characterPreviousActions: MutableMap<String, MutableList<String>> = mutableMapOf()
     private var openingScene: SceneDescription = SceneDescription()
 
     suspend fun startGame(initialWorld: World) {
@@ -56,78 +57,47 @@ class GameSession(
     private fun buildWorldSetup(): SceneDescription {
         listener.onWorldBuildingStep("start", "The DM is constructing campaign lore and an opening situation.")
 
-        val worldBuilderInstance = shimmer<DungeonMasterWorldBuilderAPI> {
+        val worldBuilder = shimmer<DungeonMasterWorldBuilderAPI> {
             adapter(apiAdapter)
             addInterceptor(WorldStateInterceptor { world })
             resilience {
                 maxRetries = 2
                 retryDelayMs = 500
             }
-        }
-
-        val worldBuilderDecider = shimmer<DecidingAgentAPI> {
-            adapter(apiAdapter)
-            addInterceptor(WorldStateInterceptor { world })
-            resilience { maxRetries = 1 }
         }.api
 
-        val autonomous = AutonomousAgent(worldBuilderInstance, worldBuilderDecider)
-        var finalStep: AgentDispatcher.DispatchResult? = null
-        val completedWorldSteps = mutableSetOf<String>()
-        val fallbackWorldSteps = ArrayDeque(
-            listOf(
-                "buildCampaignPremise",
-                "buildLocationGraph",
-                "buildNpcRegistry",
-                "buildPlotHooks",
-                "commitWorldSetup"
-            )
+        val steps = listOf(
+            "buildCampaignPremise" to { worldBuilder.buildCampaignPremise().get() as Any },
+            "buildLocationGraph" to { worldBuilder.buildLocationGraph().get() as Any },
+            "buildNpcRegistry" to { worldBuilder.buildNpcRegistry().get() as Any },
+            "buildPlotHooks" to { worldBuilder.buildPlotHooks().get() as Any }
         )
 
-        for (index in 0 until AGENT_TURN_BUDGET) {
-            var step = try {
-                autonomous.stepDetailed()
+        for ((stepName, stepFn) in steps) {
+            try {
+                val result = stepFn()
+                val detail = result.toString().take(200).ifBlank { "No details" }
+                listener.onWorldBuildingStep(stepName, detail)
             } catch (e: Exception) {
-                val forcedMethod = fallbackWorldSteps.removeFirstOrNull() ?: "commitWorldSetup"
                 listener.onWorldBuildingStep(
-                    "recover",
-                    "Recovered from invalid DM world step (${e.message?.take(120)}); forcing '$forcedMethod'."
+                    stepName,
+                    "Step failed (${e.message?.take(120)}); continuing with remaining steps."
                 )
-                autonomous.invoke(forcedMethod)
-            }
-
-            if (!step.isTerminal && completedWorldSteps.contains(step.methodName)) {
-                val forcedMethod = fallbackWorldSteps.firstOrNull { it !in completedWorldSteps } ?: "commitWorldSetup"
-                listener.onWorldBuildingStep(
-                    "recover",
-                    "Detected repeated world-build step '${step.methodName}'; forcing '$forcedMethod'."
-                )
-                step = autonomous.invoke(forcedMethod)
-            }
-
-            completedWorldSteps.add(step.methodName)
-            val detail = step.value?.toString()?.take(200)?.ifBlank { "No details" } ?: "No details"
-            listener.onWorldBuildingStep(step.methodName, detail)
-            finalStep = step
-            if (step.isTerminal) {
-                break
             }
         }
 
-        val resolved = finalStep?.takeIf { it.isTerminal }
-            ?: run {
-                listener.onWorldBuildingStep(
-                    "recover",
-                    "Budget exhausted without terminal setup; forcing 'commitWorldSetup'."
-                )
-                autonomous.invoke("commitWorldSetup")
-            }
-
-        val worldBuildResult = resolved.value as? WorldBuildResult
-        if (worldBuildResult == null) {
-            listener.onWorldBuildingStep("fallback", "World setup returned non-structured output; using default opening scene.")
+        val worldBuildResult = try {
+            worldBuilder.commitWorldSetup().get()
+        } catch (e: Exception) {
+            listener.onWorldBuildingStep(
+                "fallback",
+                "World setup commit failed (${e.message?.take(80)}); using default opening scene."
+            )
             return dm.describeScene().get()
         }
+
+        val detail = worldBuildResult.toString().take(200).ifBlank { "No details" }
+        listener.onWorldBuildingStep("commitWorldSetup", detail)
 
         val mergedLore = world.lore.copy(
             campaignPremise = worldBuildResult.campaignPremise.ifBlank { world.lore.campaignPremise },
@@ -153,7 +123,10 @@ class GameSession(
             questLog = newQuests
         )
 
-        listener.onWorldBuildingStep("commit", "World setup committed with ${mergedLore.npcs.size} NPC(s) and ${mergedLore.locations.size} location node(s).")
+        listener.onWorldBuildingStep(
+            "commit",
+            "World setup committed with ${mergedLore.npcs.size} NPC(s) and ${mergedLore.locations.size} location node(s)."
+        )
 
         return worldBuildResult.openingScene.takeIf { it.narrative.isNotBlank() }
             ?: dm.describeScene().get()
@@ -196,6 +169,8 @@ class GameSession(
 
             world = applyResult(world, finalResult, currentStats.name)
             world = applyPlayerStateUpdate(world, currentStats.name, playerAction)
+            characterPreviousActions.getOrPut(currentStats.name) { mutableListOf() }
+                .apply { add(action); if (size > 2) removeFirst() }
             val logEntry = "Round ${world.round}: ${currentStats.name} — $action → " +
                 if (finalResult.success) "success" else "failure"
             world = world.copy(
@@ -214,11 +189,13 @@ class GameSession(
         val agent = aiAgents[character.name]
         val turnHistory = mutableListOf<String>()
         turnHistories[character.name] = turnHistory
+        val prevActions = characterPreviousActions[character.name] ?: emptyList()
         turnStates[character.name] = TurnState(
             phase = "OBSERVE",
             stepsUsed = 0,
             stepsBudget = AGENT_TURN_BUDGET,
-            recentSteps = turnHistory
+            recentSteps = turnHistory,
+            previousRoundActions = prevActions
         )
         if (agent != null) {
             try {
@@ -236,7 +213,8 @@ class GameSession(
                     phase = "PLAN",
                     stepsUsed = 0,
                     stepsBudget = AGENT_TURN_BUDGET,
-                    recentSteps = turnHistory
+                    recentSteps = turnHistory,
+                    previousRoundActions = prevActions
                 )
                 listener.onAgentStep(
                     characterName = character.name,
@@ -271,7 +249,8 @@ class GameSession(
                         phase = if (stepResult.isTerminal) "DONE" else "PLAN",
                         stepsUsed = stepIndex,
                         stepsBudget = AGENT_TURN_BUDGET,
-                        recentSteps = turnHistory
+                        recentSteps = turnHistory,
+                        previousRoundActions = prevActions
                     )
                     listener.onAgentStep(
                         characterName = character.name,
@@ -308,7 +287,8 @@ class GameSession(
                     phase = if (fallbackTerminal.isTerminal) "DONE" else "PLAN",
                     stepsUsed = AGENT_TURN_BUDGET,
                     stepsBudget = AGENT_TURN_BUDGET,
-                    recentSteps = turnHistory
+                    recentSteps = turnHistory,
+                    previousRoundActions = prevActions
                 )
                 listener.onAgentStep(
                     characterName = character.name,
@@ -341,7 +321,8 @@ class GameSession(
             phase = "DONE",
             stepsUsed = AGENT_TURN_BUDGET,
             stepsBudget = AGENT_TURN_BUDGET,
-            recentSteps = turnHistory
+            recentSteps = turnHistory,
+            previousRoundActions = prevActions
         )
         val fallback = PlayerAction(
             action = "I look around cautiously.",
@@ -373,6 +354,12 @@ class GameSession(
 
         val total = diceValue + normalizedModifier
         val success = total >= roll.difficulty
+
+        val modSign = if (normalizedModifier >= 0) "+" else ""
+        val rollLog = "Round ${world.round}: \uD83C\uDFB2 ${character.name} ${roll.rollType}: " +
+            "d20($diceValue) $modSign$normalizedModifier = $total vs DC ${roll.difficulty} \u2192 " +
+            if (success) "SUCCESS" else "FAIL"
+        world = world.copy(actionLog = (world.actionLog + rollLog).takeLast(20))
 
         return dm.resolveRoll(
             roll.characterName,

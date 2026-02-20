@@ -14,6 +14,12 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
 
     private val json = Json { prettyPrint = true }
 
+    private fun escalationGuidance(round: Int): String = when {
+        round <= 1 -> "- Establish the scene. Introduce the situation, key NPCs, and the immediate environment."
+        round == 2 -> "- COMPLICATE: Introduce a new threat, NPC arrival, moral dilemma, or unexpected twist. The status quo must change."
+        else -> "- ESCALATE: Force a confrontation, reveal a secret, trigger combat, or create a crisis. The party CANNOT stand still — the world moves whether they act or not."
+    }
+
     override fun intercept(context: PromptContext): PromptContext {
         val world = worldProvider()
         val worldJson = json.encodeToString(world)
@@ -65,6 +71,9 @@ class WorldStateInterceptor(private val worldProvider: () -> World) : Intercepto
                 |
                 |## Whisper Log (Recent)
                 |${world.whisperLog.takeLast(8).joinToString("\n") { "- R${it.round} ${it.from} -> ${it.to}: ${it.message}" }.ifBlank { "- None yet" }}
+                |
+                |## Narrative Escalation (Round ${world.round})
+                |${escalationGuidance(world.round)}
                 |
                 |```json
                 |$worldJson

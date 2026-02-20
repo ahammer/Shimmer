@@ -1,6 +1,6 @@
 package com.adamhammer.shimmer.samples.dnd
 
-import com.adamhammer.shimmer.agents.Terminal
+import com.adamhammer.shimmer.annotations.Terminal
 import com.adamhammer.shimmer.annotations.AiOperation
 import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.Memorize

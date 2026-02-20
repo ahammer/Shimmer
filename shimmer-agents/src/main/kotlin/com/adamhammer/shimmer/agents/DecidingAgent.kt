@@ -11,6 +11,7 @@ import com.adamhammer.shimmer.annotations.AiSchema
 import com.adamhammer.shimmer.annotations.AiOperation
 import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.AiParameter
+import com.adamhammer.shimmer.annotations.Terminal
 
 @Serializable
 @AiSchema(title = "AI Argument", description = "A single named argument")
@@ -41,15 +42,7 @@ fun <T : Any> DecidingAgentAPI.decide(
     shimmerInstance: ShimmerInstance<T>,
     excludedMethods: Set<String> = emptySet()
 ): Future<AiDecision> {
-    var schema = shimmerInstance.klass.toJsonClassMetadataString()
-    if (excludedMethods.isNotEmpty()) {
-        excludedMethods.forEach { methodName ->
-            schema = schema.replace(
-                Regex("""\{\s*"name"\s*:\s*"${Regex.escape(methodName)}"[\s\S]*?\}\s*,?"""),
-                ""
-            )
-        }
-    }
+    val schema = shimmerInstance.klass.toJsonClassMetadataString(excludedMethods)
     return decideNextAction(schema)
 }
 
