@@ -40,8 +40,10 @@ interface PlayerAgentAPI {
 
     @AiOperation(
         summary = "Whisper Planning",
-        description = "Think about party coordination and decide whether to send a short whisper this turn. " +
-            "This step should only plan coordination; the actual whisper is sent via commitAction whisperTarget/whisperMessage. Call this at most ONCE per turn."
+        description = "Think about party coordination and decide whether " +
+            "to send a short whisper this turn. " +
+            "This step should only plan coordination; the actual whisper is sent " +
+            "via commitAction whisperTarget/whisperMessage. Call this at most ONCE per turn."
     )
     @AiResponse(
         description = "A short tactical-social reflection for this turn",
@@ -58,9 +60,9 @@ interface PlayerAgentAPI {
                 "State your action in ONE short sentence as a player command " +
                 "(e.g. 'I attack the goblin with my longsword' or 'I search the chest for traps'). " +
                 "Do NOT narrate what happens or describe the outcome — that is the DM's job. " +
-                "IMPORTANT: Do NOT repeat an action you already took in a previous round. " +
-                "Check the action log — if you did something last round, try something DIFFERENT. " +
-                "React to what has changed in the world. Be creative and advance the story. " +
+                "Review your recent actions below. The world has evolved — react to what's new. " +
+                "Vary your approach: try different abilities, talk to different NPCs, explore new options. " +
+                "Repeating the same action has diminishing returns — the DM will escalate consequences. " +
                 "You may optionally provide journalEntry, emotionalUpdate, goalUpdate, whisperTarget, and whisperMessage " +
                 "to persist your own internal state and coordinate with teammates."
     )
@@ -68,7 +70,9 @@ interface PlayerAgentAPI {
         description = "A short, specific player action (1-2 sentences max), not narration",
         responseClass = PlayerAction::class
     )
-    @Memorize(label = "Chosen action")
     @Terminal
-    fun commitAction(): Future<PlayerAction>
+    fun commitAction(
+        @AiParameter(description = "Your recent actions")
+        recentActions: String
+    ): Future<PlayerAction>
 }

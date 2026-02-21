@@ -62,6 +62,7 @@ object CharacterUtils {
     /** Build a Character from ability scores and class/race info. */
     fun buildCharacter(
         name: String,
+        look: String,
         race: String,
         characterClass: String,
         abilityScores: AbilityScores,
@@ -79,6 +80,7 @@ object CharacterUtils {
         }
         return Character(
             name = name,
+            look = look,
             race = race,
             characterClass = characterClass,
             level = 1,

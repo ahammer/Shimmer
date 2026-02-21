@@ -5,20 +5,49 @@ import com.adamhammer.shimmer.agents.AutonomousAgent
 import com.adamhammer.shimmer.agents.DecidingAgentAPI
 import com.adamhammer.shimmer.agents.AgentDispatcher
 import com.adamhammer.shimmer.agents.AiDecision
+import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.*
 import com.adamhammer.shimmer.samples.dnd.model.*
 import com.adamhammer.shimmer.shimmer
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Collections
+import java.util.Base64
 import kotlin.concurrent.thread
 import kotlin.random.Random
 
 class GameSession(
     private val apiAdapter: ApiAdapter,
-    private val listener: GameEventListener
+    private val listener: GameEventListener,
+    maxTurns: Int = 3,
+    private val enableImages: Boolean = true,
+    private val artStyle: String = "Anime"
 ) {
+    private data class StorySection(
+        val title: String,
+        val narrative: String,
+        var image: ImageResult? = null
+    )
+
+    private data class TurnBreakdown(
+        val round: Int,
+        val characterName: String,
+        val action: String,
+        val success: Boolean,
+        val narrative: String,
+        val diceDetail: String?
+    )
+
     companion object {
-        private const val MAX_TURNS = 3
+        private const val DEFAULT_MAX_TURNS = 3
+        private const val MAX_ALLOWED_TURNS = 100
         private const val AGENT_TURN_BUDGET = 5
+        private const val IMAGE_THREAD_JOIN_TIMEOUT_MS = 3000L
+        private val SELECTION_WEIGHTS = intArrayOf(4, 3, 2, 1)
     }
+
+    private val maxTurnsConfigured = maxTurns.coerceIn(DEFAULT_MAX_TURNS, MAX_ALLOWED_TURNS)
 
     private lateinit var world: World
     private lateinit var dm: DungeonMasterAPI
@@ -26,10 +55,13 @@ class GameSession(
     private val turnStates: MutableMap<String, TurnState> = mutableMapOf()
     private val turnHistories: MutableMap<String, MutableList<String>> = mutableMapOf()
     private val characterPreviousActions: MutableMap<String, MutableList<String>> = mutableMapOf()
+    private val storySections: MutableList<StorySection> = Collections.synchronizedList(mutableListOf())
+    private val turnBreakdown: MutableList<TurnBreakdown> = Collections.synchronizedList(mutableListOf())
+    private val imageWorkers: MutableList<Thread> = Collections.synchronizedList(mutableListOf())
     private var openingScene: SceneDescription = SceneDescription()
 
     suspend fun startGame(initialWorld: World) {
-        world = initialWorld
+        world = initialWorld.copy(maxRounds = maxTurnsConfigured)
 
         dm = shimmer<DungeonMasterAPI> {
             adapter(apiAdapter)
@@ -41,6 +73,9 @@ class GameSession(
                     when (r) {
                         is ActionResult -> r.narrative.isNotBlank() && r.hpChange in -15..15
                         is SceneDescription -> r.narrative.isNotBlank()
+                        is RoundSummaryResult -> r.narrative.isNotBlank()
+                        is RoundOutcomeProposals -> r.candidates.count { it.narrative.isNotBlank() } >= 2
+                        is ActionOutcomeProposals -> r.candidates.count { it.narrative.isNotBlank() } >= 2
                         else -> true
                     }
                 }
@@ -50,8 +85,9 @@ class GameSession(
         openingScene = buildWorldSetup()
         aiAgents = buildAiAgents(world)
 
+        val openingSectionIndex = appendStorySection("Opening Scene", openingScene.narrative)
         listener.onSceneDescription(openingScene)
-        requestSceneImage()
+        requestSceneImage(openingSectionIndex)
 
         runGameLoop()
     }
@@ -135,23 +171,34 @@ class GameSession(
     }
 
     private suspend fun runGameLoop() {
-        while (world.party.any { it.hp > 0 } && world.round < MAX_TURNS) {
+        while (world.party.any { it.hp > 0 } && world.round < maxTurnsConfigured) {
             world = world.copy(round = world.round + 1)
             listener.onRoundStarted(world.round, world)
 
             processRound()
 
             if (world.party.all { it.hp <= 0 }) {
-                listener.onGameOver(world)
+                finishGame()
                 return
             }
 
-            val summary = dm.narrateRoundSummary().get()
-            listener.onRoundSummary(summary, world)
-            requestSceneImage()
+            val proposals = dm.proposeRoundOutcomes().get()
+            val selected = weightedRandomSelect(proposals.candidates) { it.engagementScore }
+            val summary = selected.toRoundSummaryResult()
+            val selectionLog = "Round ${world.round}: \uD83C\uDFAF DM chose '${selected.category}' " +
+                "(score: ${selected.engagementScore}/10)"
+            world = world.copy(actionLog = (world.actionLog + selectionLog).takeLast(40))
+            world = applyRoundSummary(world, summary)
+            val sceneDescription = SceneDescription(
+                narrative = summary.narrative,
+                availableActions = summary.availableActions
+            )
+            val summarySectionIndex = appendStorySection("Round ${world.round} Summary", summary.narrative)
+            listener.onRoundSummary(sceneDescription, world)
+            requestSceneImage(summarySectionIndex)
         }
 
-        listener.onGameOver(world)
+        finishGame()
     }
 
     private suspend fun processRound() {
@@ -167,17 +214,37 @@ class GameSession(
             val playerAction = resolveCharacterAction(currentStats)
             val action = playerAction.action.ifBlank { "I hold my position and reassess." }
 
-            val result = dm.processAction(currentStats.name, action).get()
+            val actionProposals = dm.proposeActionOutcomes(currentStats.name, action).get()
+            val selectedAction = weightedRandomSelect(actionProposals.candidates) { it.engagementScore }
+            val result = selectedAction.toActionResult()
+            val actionSelLog = "Round ${world.round}: \uD83C\uDFAF ${currentStats.name} outcome '${selectedAction.category}' " +
+                "(score: ${selectedAction.engagementScore}/10)"
+            world = world.copy(actionLog = (world.actionLog + actionSelLog).takeLast(40))
             val finalResult = handleDiceRoll(currentStats, result)
 
             world = applyResult(world, finalResult, currentStats.name)
             world = applyPlayerStateUpdate(world, currentStats.name, playerAction)
-            characterPreviousActions.getOrPut(currentStats.name) { mutableListOf() }
-                .apply { add(action); if (size > 2) removeFirst() }
+            
             val logEntry = "Round ${world.round}: ${currentStats.name} — $action → " +
-                if (finalResult.success) "success" else "failure"
+                (if (finalResult.success) "success" else "failure") + ". DM: ${finalResult.narrative}"
+            
+            characterPreviousActions.getOrPut(currentStats.name) { mutableListOf() }
+                .apply { add(logEntry); if (size > 5) removeFirst() }
+                
             world = world.copy(
-                actionLog = (world.actionLog + logEntry).takeLast(20)
+                actionLog = (world.actionLog + logEntry).takeLast(40)
+            )
+            val roundPrefix = "Round ${world.round}:"
+            val diceDetail = world.actionLog.lastOrNull {
+                it.startsWith(roundPrefix) && it.contains("🎲") && it.contains(currentStats.name)
+            }
+            turnBreakdown += TurnBreakdown(
+                round = world.round,
+                characterName = currentStats.name,
+                action = action,
+                success = finalResult.success,
+                narrative = finalResult.narrative,
+                diceDetail = diceDetail
             )
             listener.onActionResult(finalResult, world)
         }
@@ -244,7 +311,7 @@ class GameSession(
                             pointsSpent = stepIndex,
                             pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
                         )
-                        agent.invoke("commitAction")
+                        agent.invoke("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
                     }
                     turnHistory += "${stepResult.methodName}: ${summarizeStepValue(stepResult.value)}"
                     currentExcludedMethods.add(stepResult.methodName)
@@ -284,7 +351,7 @@ class GameSession(
                     return playerAction
                 }
 
-                val fallbackTerminal = agent.invoke("commitAction")
+                val fallbackTerminal = agent.invoke("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
                 turnHistory += "${fallbackTerminal.methodName}: ${summarizeStepValue(fallbackTerminal.value)}"
                 turnStates[character.name] = TurnState(
                     phase = if (fallbackTerminal.isTerminal) "DONE" else "PLAN",
@@ -362,7 +429,7 @@ class GameSession(
         val rollLog = "Round ${world.round}: \uD83C\uDFB2 ${character.name} ${roll.rollType}: " +
             "d20($diceValue) $modSign$normalizedModifier = $total vs DC ${roll.difficulty} \u2192 " +
             if (success) "SUCCESS" else "FAIL"
-        world = world.copy(actionLog = (world.actionLog + rollLog).takeLast(20))
+        world = world.copy(actionLog = (world.actionLog + rollLog).takeLast(40))
 
         return dm.resolveRoll(
             roll.characterName,
@@ -416,7 +483,7 @@ class GameSession(
             val toolProvider = PlayerToolProvider(characterProvider)
             val playerInstance = shimmer<PlayerAgentAPI> {
                 adapter(apiAdapter)
-                addInterceptor(WorldStateInterceptor { this@GameSession.world })
+                addInterceptor(WorldStateInterceptor(isDm = false) { this@GameSession.world })
                 addInterceptor(CharacterInterceptor(characterProvider))
                 addInterceptor(
                     TurnStateInterceptor {
@@ -434,7 +501,7 @@ class GameSession(
 
             val decider = shimmer<DecidingAgentAPI> {
                 adapter(apiAdapter)
-                addInterceptor(WorldStateInterceptor { this@GameSession.world })
+                addInterceptor(WorldStateInterceptor(isDm = false) { this@GameSession.world })
                 addInterceptor(CharacterInterceptor(characterProvider))
                 addInterceptor(
                     TurnStateInterceptor {
@@ -566,6 +633,110 @@ class GameSession(
         )
     }
 
+    private fun applyRoundSummary(world: World, summary: RoundSummaryResult): World {
+        var w = world
+
+        // Apply location change
+        if (summary.newLocationName.isNotBlank()) {
+            w = w.copy(
+                location = Location(
+                    name = summary.newLocationName,
+                    description = summary.newLocationDescription,
+                    exits = summary.newExits,
+                    npcs = summary.newNpcs
+                )
+            )
+        } else if (summary.newNpcs.isNotEmpty()) {
+            w = w.copy(
+                location = w.location.copy(
+                    npcs = (w.location.npcs + summary.newNpcs).distinct()
+                )
+            )
+        }
+
+        // Apply NPC profiles to lore
+        if (summary.newNpcProfiles.isNotEmpty()) {
+            val merged = (w.lore.npcs + summary.newNpcProfiles)
+                .associateBy { it.name.lowercase() }.values.toList()
+            w = w.copy(lore = w.lore.copy(npcs = merged))
+        }
+
+        // Apply quest update
+        if (summary.questUpdate.isNotBlank()) {
+            w = w.copy(questLog = w.questLog + summary.questUpdate)
+        }
+
+        // Apply party effects (HP changes, status changes)
+        if (summary.partyEffects.isNotEmpty()) {
+            val updatedParty = w.party.map { c ->
+                val effect = summary.partyEffects.find { it.characterName.equals(c.name, ignoreCase = true) }
+                if (effect != null) {
+                    val newHp = (c.hp + effect.hpChange).coerceIn(0, c.maxHp)
+                    val newStatus = effect.statusChange.ifBlank { c.status }
+                    c.copy(hp = newHp, status = newStatus)
+                } else c
+            }
+            w = w.copy(party = updatedParty)
+        }
+
+        // Append world event to action log
+        if (summary.worldEvent.isNotBlank()) {
+            val eventLog = "Round ${w.round}: \uD83C\uDF0D WORLD EVENT — ${summary.worldEvent}"
+            w = w.copy(actionLog = (w.actionLog + eventLog).takeLast(40))
+        }
+
+        // Append round summary narrative to action log
+        if (summary.narrative.isNotBlank()) {
+            val narrativeLog = "Round ${w.round} Summary: ${summary.narrative}"
+            w = w.copy(actionLog = (w.actionLog + narrativeLog).takeLast(40))
+        }
+
+        return w
+    }
+
+    private fun <T> weightedRandomSelect(candidates: List<T>, scoreExtractor: (T) -> Int): T {
+        if (candidates.size == 1) return candidates.first()
+        val sorted = candidates.sortedByDescending(scoreExtractor)
+        val weights = SELECTION_WEIGHTS
+        val totalWeight = sorted.indices.sumOf { i -> weights.getOrElse(i) { 1 } }
+        var roll = Random.nextInt(totalWeight)
+        for ((i, candidate) in sorted.withIndex()) {
+            roll -= weights.getOrElse(i) { 1 }
+            if (roll < 0) return candidate
+        }
+        return sorted.first()
+    }
+
+    private fun RoundOutcomeCandidate.toRoundSummaryResult() = RoundSummaryResult(
+        narrative = narrative,
+        availableActions = availableActions,
+        worldEvent = worldEvent,
+        newLocationName = newLocationName,
+        newLocationDescription = newLocationDescription,
+        newExits = newExits,
+        newNpcs = newNpcs,
+        newNpcProfiles = newNpcProfiles,
+        questUpdate = questUpdate,
+        partyEffects = partyEffects
+    )
+
+    private fun ActionOutcomeCandidate.toActionResult() = ActionResult(
+        narrative = narrative,
+        success = success,
+        targetCharacterName = targetCharacterName,
+        hpChange = hpChange,
+        itemsGained = itemsGained,
+        itemsLost = itemsLost,
+        newLocationName = newLocationName,
+        newLocationDescription = newLocationDescription,
+        newExits = newExits,
+        newNpcs = newNpcs,
+        newNpcProfiles = newNpcProfiles,
+        questUpdate = questUpdate,
+        statusChange = statusChange,
+        diceRollRequest = diceRollRequest
+    )
+
     private fun parseAiAction(stepResult: String, characterName: String): String {
         // Try JSON format: "action": "..."
         val jsonPattern = Regex(""""action"\s*:\s*"([^"]+)"""")
@@ -581,13 +752,134 @@ class GameSession(
         }
     }
 
-    private fun requestSceneImage() {
-        thread(isDaemon = true, name = "scene-image-generator") {
+    private fun requestSceneImage(storySectionIndex: Int) {
+        if (!enableImages) return
+        
+        val worker = thread(isDaemon = true, name = "scene-image-generator") {
             try {
-                val image = dm.generateSceneImage().get()
+                val prompt = dm.generateSceneImagePrompt(artStyle).get()
+                val image = dm.generateImage(prompt).get()
+                synchronized(storySections) {
+                    storySections.getOrNull(storySectionIndex)?.image = image
+                }
                 listener.onImageGenerated(image)
             } catch (_: Exception) {
             }
         }
+        imageWorkers += worker
+    }
+
+    private fun appendStorySection(title: String, narrative: String): Int {
+        synchronized(storySections) {
+            storySections.add(
+                StorySection(
+                    title = title,
+                    narrative = narrative.ifBlank { "(No narrative provided)" }
+                )
+            )
+            return storySections.lastIndex
+        }
+    }
+
+    private fun finishGame() {
+        val reportPath = runCatching {
+            waitForImageWorkers()
+            writeEndGameSummaryMarkdown()
+        }.getOrNull()
+
+        listener.onGameOver(world)
+        if (!reportPath.isNullOrBlank()) {
+            listener.onEndGameSummaryGenerated(reportPath)
+        }
+    }
+
+    private fun waitForImageWorkers() {
+        val workersSnapshot = synchronized(imageWorkers) { imageWorkers.toList() }
+        for (worker in workersSnapshot) {
+            if (worker.isAlive) {
+                runCatching { worker.join(IMAGE_THREAD_JOIN_TIMEOUT_MS) }
+            }
+        }
+    }
+
+    private fun writeEndGameSummaryMarkdown(): String {
+        val generatedAt = LocalDateTime.now()
+        val fileTimestamp = generatedAt.format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        val displayTimestamp = generatedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+        val reportsDir = File("build/reports/dnd")
+        if (!reportsDir.exists()) {
+            reportsDir.mkdirs()
+        }
+
+        val reportFile = File(reportsDir, "dnd-endgame-summary-$fileTimestamp.md")
+        val imageDir = File(reportsDir, "images/$fileTimestamp")
+        if (!imageDir.exists()) {
+            imageDir.mkdirs()
+        }
+
+        val storySnapshot = synchronized(storySections) { storySections.toList() }
+        val turnSnapshot = synchronized(turnBreakdown) { turnBreakdown.toList() }
+
+        val markdown = StringBuilder()
+        markdown.append("# DND End-Game Summary\n\n")
+        markdown.append("- Generated: $displayTimestamp\n")
+        markdown.append("- Final Round: ${world.round}\n")
+        markdown.append("- Final Location: ${world.location.name}\n\n")
+
+        markdown.append("## Story + Images\n\n")
+        if (storySnapshot.isEmpty()) {
+            markdown.append("No story sections were captured.\n\n")
+        } else {
+            storySnapshot.forEachIndexed { index, section ->
+                markdown.append("### ${index + 1}. ${section.title}\n\n")
+                markdown.append(section.narrative.trim()).append("\n\n")
+                section.image?.let { image ->
+                    if (image.base64.isNotBlank()) {
+                        val imageFileName = "section-${(index + 1).toString().padStart(2, '0')}-${slugify(section.title)}.png"
+                        val imageFile = File(imageDir, imageFileName)
+                        runCatching {
+                            imageFile.writeBytes(Base64.getDecoder().decode(image.base64))
+                        }.onSuccess {
+                            val relativePath = "images/$fileTimestamp/$imageFileName"
+                            markdown.append("![${section.title}](${relativePath.replace("\\", "/")})\n\n")
+                        }
+                    }
+                }
+            }
+        }
+
+        markdown.append("## Turn by Turn Breakdown\n\n")
+        if (turnSnapshot.isEmpty()) {
+            markdown.append("No turn events were captured.\n")
+        } else {
+            val turnsByRound = turnSnapshot.groupBy { it.round }.toSortedMap()
+            for ((round, turns) in turnsByRound) {
+                markdown.append("### Round $round\n\n")
+                turns.forEachIndexed { index, turn ->
+                    markdown.append("${index + 1}. **${turn.characterName}**\n")
+                    markdown.append("   - Action: ${toInline(turn.action)}\n")
+                    markdown.append("   - Outcome: ${if (turn.success) "Success" else "Failure"}\n")
+                    markdown.append("   - Narrative: ${toInline(turn.narrative)}\n")
+                    turn.diceDetail?.takeIf { it.isNotBlank() }?.let {
+                        markdown.append("   - Dice: ${toInline(it)}\n")
+                    }
+                    markdown.append("\n")
+                }
+            }
+        }
+
+        reportFile.writeText(markdown.toString())
+        return reportFile.absolutePath
+    }
+
+    private fun toInline(text: String): String = text.replace("\n", " ").trim()
+
+    private fun slugify(input: String): String {
+        val normalized = input
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+        return normalized.ifBlank { "scene" }
     }
 }

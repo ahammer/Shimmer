@@ -76,6 +76,10 @@ class CliGameListener : GameEventListener {
         }
     }
 
+    override fun onEndGameSummaryGenerated(reportPath: String) {
+        println("\n📝 End-game summary: $reportPath")
+    }
+
     override fun onCharacterThinking(characterName: String) {
         println("\n  🤖 $characterName is thinking...")
     }
@@ -137,11 +141,12 @@ private fun createCharacter(
     val (backstory, stats, items) = resolveBackstoryAndStats(backstoryDm, concept.name, concept.race, concept.characterClass)
 
     return CharacterUtils.buildCharacter(
-        concept.name,
-        concept.race,
-        concept.characterClass,
-        stats,
-        backstory,
+        name = concept.name,
+        look = "A typical adventurer.",
+        race = concept.race,
+        characterClass = concept.characterClass,
+        abilityScores = stats,
+        backstory = backstory,
         aiSuggestedItems = items
     )
 }

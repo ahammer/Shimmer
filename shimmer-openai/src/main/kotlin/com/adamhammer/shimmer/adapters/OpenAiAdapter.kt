@@ -38,6 +38,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createType
@@ -46,7 +48,9 @@ import java.util.logging.Logger
 class OpenAiAdapter(
     private val model: ChatModel = ChatModel.GPT_4O_MINI,
     client: OpenAIClient? = null,
-    private val maxToolRounds: Int = 10
+    private val maxToolRounds: Int = 10,
+    private val imageModel: ImageModel = ImageModel.DALL_E_3,
+    private val imageSize: ImageGenerateParams.Size = ImageGenerateParams.Size._1024X1024
 ) : ApiAdapter {
     private val logger = Logger.getLogger(OpenAiAdapter::class.java.name)
 
@@ -128,21 +132,23 @@ class OpenAiAdapter(
     }
 
     private fun handleImageRequest(context: PromptContext): ImageResult {
-        val promptMessages = buildImagePromptMessages(context)
-        val promptParams = buildParams(messages = promptMessages, tools = null, responseFormat = null)
+        val promptText = extractPromptFromContext(context) ?: run {
+            val promptMessages = buildImagePromptMessages(context)
+            val promptParams = buildParams(messages = promptMessages, tools = null, responseFormat = null)
 
-        val promptCompletion: ChatCompletion = client.chat().completions().create(promptParams)
-        val promptText = promptCompletion.choices().firstOrNull()?.message()?.content()?.orElse(null)?.trim()
-            ?.trim('"')
-            ?.ifBlank { null }
-            ?: throw ShimmerDeserializationException("No image prompt returned from OpenAI")
+            val promptCompletion: ChatCompletion = client.chat().completions().create(promptParams)
+            promptCompletion.choices().firstOrNull()?.message()?.content()?.orElse(null)?.trim()
+                ?.trim('"')
+                ?.ifBlank { null }
+                ?: throw ShimmerDeserializationException("No image prompt returned from OpenAI")
+        }
 
         val imageResponse = client.images().generate(
             ImageGenerateParams.builder()
-                .model(ImageModel.DALL_E_3)
+                .model(imageModel)
                 .prompt(promptText)
                 .responseFormat(ImageGenerateParams.ResponseFormat.B64_JSON)
-                .size(ImageGenerateParams.Size._1024X1024)
+                .size(imageSize)
                 .build()
         )
 
@@ -157,6 +163,25 @@ class OpenAiAdapter(
             prompt = promptText,
             revisedPrompt = imageData.revisedPrompt().orElse("")
         )
+    }
+
+    private fun extractPromptFromContext(context: PromptContext): String? {
+        try {
+            val jsonElement = json.parseToJsonElement(context.methodInvocation)
+            if (jsonElement is JsonObject) {
+                val method = jsonElement["method"]?.jsonPrimitive?.content
+                if (method != null && method.startsWith("generateImage")) {
+                    val parameters = jsonElement["parameters"]?.jsonArray
+                    if (parameters != null && parameters.isNotEmpty()) {
+                        val firstParam = parameters[0].jsonObject
+                        return firstParam["value"]?.jsonPrimitive?.content
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.warning("Failed to extract prompt from context: ${e.message}")
+        }
+        return null
     }
 
     private fun buildImagePromptMessages(context: PromptContext): MutableList<ChatCompletionMessageParam> {

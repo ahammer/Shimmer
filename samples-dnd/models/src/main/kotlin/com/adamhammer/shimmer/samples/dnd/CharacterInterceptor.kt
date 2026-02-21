@@ -10,12 +10,18 @@ import com.adamhammer.shimmer.samples.dnd.model.Character
  */
 class CharacterInterceptor(private val characterProvider: () -> Character) : Interceptor {
 
-    private fun classInstincts(characterClass: String): String = when (characterClass.lowercase()) {
-        "rogue" -> "You prefer scouting, stealth, and cunning. Check for traps, pick locks, sneak ahead. Act before others notice."
-        "cleric" -> "You protect and heal. Check on wounded allies first. Use divine knowledge for mysteries and undead threats."
-        "bard" -> "You inspire and negotiate. Talk to NPCs, use performance, gather information socially. Charm before combat."
-        "fighter" -> "You lead the charge. Position for combat, protect the vulnerable, test physical obstacles. Action over hesitation."
-        "wizard", "sorcerer" -> "You analyze and exploit. Study magical phenomena, identify arcane threats, use spells strategically. Knowledge is power."
+    private fun classInstincts(characterClass: String): String =
+        when (characterClass.lowercase()) {
+        "rogue" -> "You prefer scouting, stealth, and cunning. " +
+            "Check for traps, pick locks, sneak ahead. Act before others notice."
+        "cleric" -> "You protect and heal. Check on wounded allies first. " +
+            "Use divine knowledge for mysteries and undead threats."
+        "bard" -> "You inspire and negotiate. Talk to NPCs, use performance, " +
+            "gather information socially. Charm before combat."
+        "fighter" -> "You lead the charge. Position for combat, " +
+            "protect the vulnerable, test physical obstacles. Action over hesitation."
+        "wizard", "sorcerer" -> "You analyze and exploit. Study magical phenomena, " +
+            "identify arcane threats, use spells strategically. Knowledge is power."
         "ranger" -> "You track and scout. Read the environment, identify creatures, find paths. The wilderness speaks to you."
         "paladin" -> "You uphold your oath. Protect the innocent, confront evil directly, inspire through action. Duty first."
         "warlock" -> "You bargain and manipulate. Use your patron's gifts creatively, seek hidden knowledge, embrace the shadows."

@@ -22,6 +22,7 @@ interface GameEventListener {
     fun onDiceRollRequested(character: Character, request: DiceRollRequest) {}
     fun onRoundSummary(summary: SceneDescription, world: World)
     fun onGameOver(world: World)
+    fun onEndGameSummaryGenerated(reportPath: String) {}
     fun onCharacterThinking(characterName: String)
     fun onCharacterAction(characterName: String, action: String)
     fun onWhisper(fromCharacter: String, toCharacter: String, message: String) {}
