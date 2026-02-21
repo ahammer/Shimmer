@@ -2,6 +2,7 @@ package com.adamhammer.shimmer.samples.dnd
 
 import com.adamhammer.shimmer.interfaces.Interceptor
 import com.adamhammer.shimmer.model.PromptContext
+import com.adamhammer.shimmer.samples.dnd.model.GameRules
 import com.adamhammer.shimmer.samples.dnd.model.World
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -63,7 +64,7 @@ class WorldStateInterceptor(private val isDm: Boolean = true, private val worldP
         }
 
         val patternsSection = patternsBuilder.toString().trimEnd().ifBlank { "- No patterns yet." }
-        val stagnationWarning = buildStagnationWarning(stagnatingCharacters)
+        val stagnationWarning = buildStagnationWarning(stagnatingCharacters, world.turnsAtCurrentLocation)
         return stagnationWarning to patternsSection
     }
 
@@ -95,23 +96,37 @@ class WorldStateInterceptor(private val isDm: Boolean = true, private val worldP
     }
 
     private fun buildStagnationWarning(
-        stagnatingCharacters: List<Pair<String, Int>>
+        stagnatingCharacters: List<Pair<String, Int>>,
+        turnsAtCurrentLocation: Int
     ): String {
-        if (stagnatingCharacters.isEmpty()) return ""
-        val names = stagnatingCharacters.joinToString(", ") {
-            "${it.first} (${it.second} rounds)"
+        val warnings = mutableListOf<String>()
+        
+        if (turnsAtCurrentLocation >= 3) {
+            warnings.add("""
+                |## ⚠ PACING WARNING: LINGERING TOO LONG
+                |The party has been at the current location for $turnsAtCurrentLocation rounds.
+                |According to the Shared Rulebook, you MUST force a transition NOW.
+                |Provide clear exits, introduce an urgent plot hook, or forcefully move the party to a new location (set newLocationName).
+            """.trimMargin())
         }
-        return """
-            |
-            |## ⚠ STAGNATION WARNING
-            |The following characters have been repeating similar actions: $names.
-            |As DM, you MUST intervene NOW:
-            |- Force a scene change (set newLocationName).
-            |- Trigger combat or an ambush (use partyEffects with HP damage and worldEvent).
-            |- Have an NPC interrupt with urgent news (use newNpcs/newNpcProfiles).
-            |- Create a crisis that makes the current approach impossible (use worldEvent).
-            |DO NOT simply describe "rising tension" again. MAKE something happen.
-        """.trimMargin()
+
+        if (stagnatingCharacters.isNotEmpty()) {
+            val names = stagnatingCharacters.joinToString(", ") {
+                "${it.first} (${it.second} rounds)"
+            }
+            warnings.add("""
+                |## ⚠ STAGNATION WARNING: REPETITIVE ACTIONS
+                |The following characters have been repeating similar actions: $names.
+                |As DM, you MUST intervene NOW:
+                |- Force a scene change (set newLocationName).
+                |- Trigger combat or an ambush (use partyEffects with HP damage and worldEvent).
+                |- Have an NPC interrupt with urgent news (use newNpcs/newNpcProfiles).
+                |- Create a crisis that makes the current approach impossible (use worldEvent).
+                |DO NOT simply describe "rising tension" again. MAKE something happen.
+            """.trimMargin())
+        }
+        
+        return warnings.joinToString("\n\n")
     }
 
     private fun actionsAreSimilar(a: String, b: String): Boolean {
@@ -186,6 +201,8 @@ class WorldStateInterceptor(private val isDm: Boolean = true, private val worldP
 
         return context.copy(
             systemInstructions = context.systemInstructions + """
+                |
+                |${GameRules.SHARED_RULEBOOK}
                 |
                 |# CURRENT WORLD STATE
                 |$dmInstructions

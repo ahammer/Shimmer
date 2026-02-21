@@ -172,7 +172,10 @@ class GameSession(
 
     private suspend fun runGameLoop() {
         while (world.party.any { it.hp > 0 } && world.round < maxTurnsConfigured) {
-            world = world.copy(round = world.round + 1)
+            world = world.copy(
+                round = world.round + 1,
+                turnsAtCurrentLocation = world.turnsAtCurrentLocation + 1
+            )
             listener.onRoundStarted(world.round, world)
 
             processRound()
@@ -604,6 +607,7 @@ class GameSession(
             world.lore.npcs
         }
 
+        val locationChanged = result.newLocationName.isNotBlank() && !result.newLocationName.equals(world.location.name, ignoreCase = true)
         val newLocation = if (result.newLocationName.isNotBlank()) {
             Location(
                 name = result.newLocationName,
@@ -629,7 +633,8 @@ class GameSession(
             party = newParty,
             location = newLocation,
             lore = world.lore.copy(npcs = updatedLoreNpcs),
-            questLog = newQuestLog
+            questLog = newQuestLog,
+            turnsAtCurrentLocation = if (locationChanged) 0 else world.turnsAtCurrentLocation
         )
     }
 
@@ -637,7 +642,17 @@ class GameSession(
         var w = world
 
         // Apply location change
-        if (summary.newLocationName.isNotBlank()) {
+        if (summary.newLocationName.isNotBlank() && !summary.newLocationName.equals(w.location.name, ignoreCase = true)) {
+            w = w.copy(
+                location = Location(
+                    name = summary.newLocationName,
+                    description = summary.newLocationDescription,
+                    exits = summary.newExits,
+                    npcs = summary.newNpcs
+                ),
+                turnsAtCurrentLocation = 0
+            )
+        } else if (summary.newLocationName.isNotBlank()) {
             w = w.copy(
                 location = Location(
                     name = summary.newLocationName,

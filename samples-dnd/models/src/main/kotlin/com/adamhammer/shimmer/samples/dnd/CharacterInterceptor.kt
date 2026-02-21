@@ -79,6 +79,7 @@ class CharacterInterceptor(private val characterProvider: () -> Character) : Int
                 |- React to what changed since your last action.
                 |- Keep your goals and emotional state coherent as events evolve.
                 |- Explore, interact with NPCs, investigate, or fight — vary your approach.
+                |- **SEEK EXITS AND TRAVEL:** Do not linger in one place. Actively look for ways to move the story forward.
                 |
                 |## Class Instincts (${c.characterClass})
                 |- ${classInstincts(c.characterClass)}

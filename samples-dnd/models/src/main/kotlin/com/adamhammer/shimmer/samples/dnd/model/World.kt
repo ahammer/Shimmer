@@ -93,6 +93,8 @@ data class World(
     val round: Int = 0,
     @field:AiSchema(description = "Maximum number of rounds in this session")
     val maxRounds: Int = 40,
+    @field:AiSchema(description = "Number of consecutive rounds spent at the current location")
+    val turnsAtCurrentLocation: Int = 0,
     @field:AiSchema(description = "Persistent world lore and backstory scaffolding")
     val lore: WorldLore = WorldLore(),
     @field:AiSchema(description = "Active quests and objectives")
