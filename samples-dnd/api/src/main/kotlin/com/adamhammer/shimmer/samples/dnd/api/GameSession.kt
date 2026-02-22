@@ -24,21 +24,6 @@ class GameSession(
     private val enableImages: Boolean = true,
     private val artStyle: String = "Anime"
 ) {
-    private data class StorySection(
-        val title: String,
-        val narrative: String,
-        var image: ImageResult? = null
-    )
-
-    private data class TurnBreakdown(
-        val round: Int,
-        val characterName: String,
-        val action: String,
-        val success: Boolean,
-        val narrative: String,
-        val diceDetail: String?
-    )
-
     companion object {
         private const val DEFAULT_MAX_TURNS = 3
         private const val MAX_ALLOWED_TURNS = 100
@@ -55,8 +40,7 @@ class GameSession(
     private val turnStates: MutableMap<String, TurnState> = mutableMapOf()
     private val turnHistories: MutableMap<String, MutableList<String>> = mutableMapOf()
     private val characterPreviousActions: MutableMap<String, MutableList<String>> = mutableMapOf()
-    private val storySections: MutableList<StorySection> = Collections.synchronizedList(mutableListOf())
-    private val turnBreakdown: MutableList<TurnBreakdown> = Collections.synchronizedList(mutableListOf())
+    private val markdownTimeline: MutableList<MarkdownEntry> = Collections.synchronizedList(mutableListOf())
     private val imageWorkers: MutableList<Thread> = Collections.synchronizedList(mutableListOf())
     private var openingScene: SceneDescription = SceneDescription()
 
@@ -85,9 +69,10 @@ class GameSession(
         openingScene = buildWorldSetup()
         aiAgents = buildAiAgents(world)
 
-        val openingSectionIndex = appendStorySection("Opening Scene", openingScene.narrative)
+        markdownTimeline += MarkdownEntry.SystemMessage("Game Started", "${world.party.size} adventurers set out from ${world.location.name}.")
+        markdownTimeline += MarkdownEntry.DmNarration("Opening Scene", openingScene.narrative, "scene")
         listener.onSceneDescription(openingScene)
-        requestSceneImage(openingSectionIndex)
+        requestSceneImage()
 
         runGameLoop()
     }
@@ -116,11 +101,11 @@ class GameSession(
                 val result = stepFn()
                 val detail = result.toString().take(200).ifBlank { "No details" }
                 listener.onWorldBuildingStep(stepName, detail)
+                markdownTimeline += MarkdownEntry.WorldBuildStep(stepName, detail)
             } catch (e: Exception) {
-                listener.onWorldBuildingStep(
-                    stepName,
-                    "Step failed (${e.message?.take(120)}); continuing with remaining steps."
-                )
+                val failDetail = "Step failed (${e.message?.take(120)}); continuing with remaining steps."
+                listener.onWorldBuildingStep(stepName, failDetail)
+                markdownTimeline += MarkdownEntry.WorldBuildStep(stepName, failDetail)
             }
         }
 
@@ -161,10 +146,9 @@ class GameSession(
             questLog = newQuests
         )
 
-        listener.onWorldBuildingStep(
-            "commit",
-            "World setup committed with ${mergedLore.npcs.size} NPC(s) and ${mergedLore.locations.size} location node(s)."
-        )
+        val commitDetail = "World setup committed with ${mergedLore.npcs.size} NPC(s) and ${mergedLore.locations.size} location node(s)."
+        listener.onWorldBuildingStep("commit", commitDetail)
+        markdownTimeline += MarkdownEntry.WorldBuildStep("commit", commitDetail)
 
         return worldBuildResult.openingScene.takeIf { it.narrative.isNotBlank() }
             ?: dm.describeScene().get()
@@ -177,6 +161,7 @@ class GameSession(
                 turnsAtCurrentLocation = world.turnsAtCurrentLocation + 1
             )
             listener.onRoundStarted(world.round, world)
+            markdownTimeline += MarkdownEntry.RoundHeader(world.round, world.location.name)
 
             processRound()
 
@@ -196,9 +181,9 @@ class GameSession(
                 narrative = summary.narrative,
                 availableActions = summary.availableActions
             )
-            val summarySectionIndex = appendStorySection("Round ${world.round} Summary", summary.narrative)
+            markdownTimeline += MarkdownEntry.DmNarration("Round ${world.round} Summary", summary.narrative, "summary")
             listener.onRoundSummary(sceneDescription, world)
-            requestSceneImage(summarySectionIndex)
+            requestSceneImage()
         }
 
         finishGame()
@@ -237,17 +222,11 @@ class GameSession(
             world = world.copy(
                 actionLog = (world.actionLog + logEntry).takeLast(40)
             )
-            val roundPrefix = "Round ${world.round}:"
-            val diceDetail = world.actionLog.lastOrNull {
-                it.startsWith(roundPrefix) && it.contains("🎲") && it.contains(currentStats.name)
-            }
-            turnBreakdown += TurnBreakdown(
-                round = world.round,
+            markdownTimeline += MarkdownEntry.CharacterAction(
                 characterName = currentStats.name,
                 action = action,
-                success = finalResult.success,
-                narrative = finalResult.narrative,
-                diceDetail = diceDetail
+                outcome = finalResult.narrative,
+                success = finalResult.success
             )
             listener.onActionResult(finalResult, world)
         }
@@ -350,6 +329,7 @@ class GameSession(
                     listener.onCharacterAction(character.name, actionText)
                     if (playerAction.whisperTarget.isNotBlank() && playerAction.whisperMessage.isNotBlank()) {
                         listener.onWhisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
+                        markdownTimeline += MarkdownEntry.Whisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
                     }
                     return playerAction
                 }
@@ -384,6 +364,7 @@ class GameSession(
                 listener.onCharacterAction(character.name, actionText)
                 if (playerAction.whisperTarget.isNotBlank() && playerAction.whisperMessage.isNotBlank()) {
                     listener.onWhisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
+                    markdownTimeline += MarkdownEntry.Whisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
                 }
                 return playerAction
             } catch (e: Exception) {
@@ -421,6 +402,7 @@ class GameSession(
     private suspend fun handleDiceRoll(character: Character, result: ActionResult): ActionResult {
         val roll = result.diceRollRequest ?: return result
         listener.onDiceRollRequested(character, roll)
+        markdownTimeline += MarkdownEntry.DiceRoll(character.name, roll.rollType, roll.difficulty)
         val diceValue = Random.nextInt(1, 21)
 
         val normalizedModifier = normalizeRollModifier(character, roll)
@@ -767,33 +749,21 @@ class GameSession(
         }
     }
 
-    private fun requestSceneImage(storySectionIndex: Int) {
+    private fun requestSceneImage() {
         if (!enableImages) return
         
         val worker = thread(isDaemon = true, name = "scene-image-generator") {
             try {
                 val prompt = dm.generateSceneImagePrompt(artStyle).get()
                 val image = dm.generateImage(prompt).get()
-                synchronized(storySections) {
-                    storySections.getOrNull(storySectionIndex)?.image = image
+                if (image.base64.isNotBlank()) {
+                    markdownTimeline += MarkdownEntry.SceneImage(image)
                 }
                 listener.onImageGenerated(image)
             } catch (_: Exception) {
             }
         }
         imageWorkers += worker
-    }
-
-    private fun appendStorySection(title: String, narrative: String): Int {
-        synchronized(storySections) {
-            storySections.add(
-                StorySection(
-                    title = title,
-                    narrative = narrative.ifBlank { "(No narrative provided)" }
-                )
-            )
-            return storySections.lastIndex
-        }
     }
 
     private fun finishGame() {
@@ -823,78 +793,126 @@ class GameSession(
         val displayTimestamp = generatedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
         val reportsDir = File("build/reports/dnd")
-        if (!reportsDir.exists()) {
-            reportsDir.mkdirs()
-        }
-
+        if (!reportsDir.exists()) reportsDir.mkdirs()
         val reportFile = File(reportsDir, "dnd-endgame-summary-$fileTimestamp.md")
         val imageDir = File(reportsDir, "images/$fileTimestamp")
-        if (!imageDir.exists()) {
-            imageDir.mkdirs()
+        if (!imageDir.exists()) imageDir.mkdirs()
+
+        val timeline = synchronized(markdownTimeline) { markdownTimeline.toList() }
+        var imageCounter = 0
+
+        val md = StringBuilder()
+        md.appendLine("# D&D Campaign Timeline")
+        md.appendLine()
+        md.appendLine("*Generated: $displayTimestamp*")
+        md.appendLine()
+
+        // Party roster
+        md.appendLine("## The Party")
+        md.appendLine()
+        for (c in world.party) {
+            val status = if (c.hp <= 0) "DEAD" else "${c.hp}/${c.maxHp} HP"
+            md.appendLine("- **${c.name}** — ${c.race} ${c.characterClass} (Lvl ${c.level}) — $status")
+        }
+        md.appendLine()
+
+        // World building section
+        val worldBuildSteps = timeline.filterIsInstance<MarkdownEntry.WorldBuildStep>()
+        if (worldBuildSteps.isNotEmpty()) {
+            md.appendLine("## World Building")
+            md.appendLine()
+            for (step in worldBuildSteps) {
+                md.appendLine("- **${step.step}:** ${toInline(step.details)}")
+            }
+            md.appendLine()
         }
 
-        val storySnapshot = synchronized(storySections) { storySections.toList() }
-        val turnSnapshot = synchronized(turnBreakdown) { turnBreakdown.toList() }
+        md.appendLine("---")
+        md.appendLine()
 
-        val markdown = StringBuilder()
-        markdown.append("# DND End-Game Summary\n\n")
-        markdown.append("- Generated: $displayTimestamp\n")
-        markdown.append("- Final Round: ${world.round}\n")
-        markdown.append("- Final Location: ${world.location.name}\n\n")
-
-        markdown.append("## Story + Images\n\n")
-        if (storySnapshot.isEmpty()) {
-            markdown.append("No story sections were captured.\n\n")
-        } else {
-            storySnapshot.forEachIndexed { index, section ->
-                markdown.append("### ${index + 1}. ${section.title}\n\n")
-                markdown.append(section.narrative.trim()).append("\n\n")
-                section.image?.let { image ->
-                    if (image.base64.isNotBlank()) {
-                        val imageFileName = "section-${(index + 1).toString().padStart(2, '0')}-${slugify(section.title)}.png"
-                        val imageFile = File(imageDir, imageFileName)
-                        runCatching {
-                            imageFile.writeBytes(Base64.getDecoder().decode(image.base64))
-                        }.onSuccess {
-                            val relativePath = "images/$fileTimestamp/$imageFileName"
-                            markdown.append("![${section.title}](${relativePath.replace("\\", "/")})\n\n")
-                        }
+        // Main timeline
+        for (entry in timeline) {
+            when (entry) {
+                is MarkdownEntry.RoundHeader -> {
+                    md.appendLine("---")
+                    md.appendLine()
+                    md.appendLine("## Round ${entry.round} \u2014 ${entry.locationName}")
+                    md.appendLine()
+                }
+                is MarkdownEntry.DmNarration -> {
+                    val icon = when (entry.category) {
+                        "summary" -> "\uD83D\uDCDC"
+                        "scene" -> "\uD83C\uDFAD"
+                        else -> "\uD83D\uDCDD"
                     }
+                    md.appendLine("### $icon ${entry.title}")
+                    md.appendLine()
+                    md.appendLine(entry.narrative.trim())
+                    md.appendLine()
+                }
+                is MarkdownEntry.CharacterAction -> {
+                    val icon = when (entry.success) {
+                        true -> "\u2705"
+                        false -> "\u274C"
+                        null -> "\u2694\uFE0F"
+                    }
+                    md.appendLine("#### $icon ${entry.characterName}")
+                    md.appendLine()
+                    md.appendLine("> **Action:** ${toInline(entry.action)}")
+                    md.appendLine()
+                    if (entry.outcome.isNotBlank()) {
+                        md.appendLine(entry.outcome.trim())
+                        md.appendLine()
+                    }
+                }
+                is MarkdownEntry.DiceRoll -> {
+                    md.appendLine("\uD83C\uDFB2 **${entry.characterName}** \u2014 ${entry.rollType} (DC ${entry.difficulty})")
+                    md.appendLine()
+                }
+                is MarkdownEntry.Whisper -> {
+                    md.appendLine("\uD83E\uDD2B *${entry.from} whispers to ${entry.to}:* \"${toInline(entry.message)}\"")
+                    md.appendLine()
+                }
+                is MarkdownEntry.SceneImage -> {
+                    imageCounter++
+                    val imageFileName = "scene-${imageCounter.toString().padStart(3, '0')}.png"
+                    val imageFile = File(imageDir, imageFileName)
+                    runCatching {
+                        imageFile.writeBytes(Base64.getDecoder().decode(entry.image.base64))
+                    }.onSuccess {
+                        val relativePath = "images/$fileTimestamp/$imageFileName"
+                        md.appendLine("![Scene $imageCounter](${relativePath.replace("\\", "/")})")
+                        md.appendLine()
+                    }
+                }
+                is MarkdownEntry.SystemMessage -> {
+                    md.appendLine("**\u2139\uFE0F ${entry.title}:** ${toInline(entry.details)}")
+                    md.appendLine()
+                }
+                is MarkdownEntry.WorldBuildStep -> {
+                    // Already rendered in the World Building section above
                 }
             }
         }
 
-        markdown.append("## Turn by Turn Breakdown\n\n")
-        if (turnSnapshot.isEmpty()) {
-            markdown.append("No turn events were captured.\n")
-        } else {
-            val turnsByRound = turnSnapshot.groupBy { it.round }.toSortedMap()
-            for ((round, turns) in turnsByRound) {
-                markdown.append("### Round $round\n\n")
-                turns.forEachIndexed { index, turn ->
-                    markdown.append("${index + 1}. **${turn.characterName}**\n")
-                    markdown.append("   - Action: ${toInline(turn.action)}\n")
-                    markdown.append("   - Outcome: ${if (turn.success) "Success" else "Failure"}\n")
-                    markdown.append("   - Narrative: ${toInline(turn.narrative)}\n")
-                    turn.diceDetail?.takeIf { it.isNotBlank() }?.let {
-                        markdown.append("   - Dice: ${toInline(it)}\n")
-                    }
-                    markdown.append("\n")
-                }
-            }
+        // Final status
+        md.appendLine("---")
+        md.appendLine()
+        md.appendLine("## Final Status")
+        md.appendLine()
+        md.appendLine("- **Round:** ${world.round}/${world.maxRounds}")
+        md.appendLine("- **Location:** ${world.location.name}")
+        md.appendLine("- **Quests:** ${world.questLog.joinToString("; ").ifBlank { "None" }}")
+        md.appendLine()
+        for (c in world.party) {
+            val status = if (c.hp <= 0) "\u2620\uFE0F DEAD" else "\u2764\uFE0F ${c.hp}/${c.maxHp}"
+            md.appendLine("- **${c.name}** ($status) \u2014 ${c.status}")
         }
+        md.appendLine()
 
-        reportFile.writeText(markdown.toString())
+        reportFile.writeText(md.toString())
         return reportFile.absolutePath
     }
 
     private fun toInline(text: String): String = text.replace("\n", " ").trim()
-
-    private fun slugify(input: String): String {
-        val normalized = input
-            .lowercase()
-            .replace(Regex("[^a-z0-9]+"), "-")
-            .trim('-')
-        return normalized.ifBlank { "scene" }
-    }
 }
