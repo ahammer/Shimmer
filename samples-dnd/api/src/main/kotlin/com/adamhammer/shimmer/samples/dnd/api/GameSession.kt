@@ -99,7 +99,7 @@ class GameSession(
         for ((stepName, stepFn) in steps) {
             try {
                 val result = stepFn()
-                val detail = result.toString().take(200).ifBlank { "No details" }
+                val detail = result.toString().ifBlank { "No details" }
                 listener.onWorldBuildingStep(stepName, detail)
                 markdownTimeline += MarkdownEntry.WorldBuildStep(stepName, detail)
             } catch (e: Exception) {
@@ -119,7 +119,7 @@ class GameSession(
             return dm.describeScene().get()
         }
 
-        val detail = worldBuildResult.toString().take(200).ifBlank { "No details" }
+        val detail = worldBuildResult.toString().ifBlank { "No details" }
         listener.onWorldBuildingStep("commitWorldSetup", detail)
 
         val mergedLore = world.lore.copy(
@@ -396,7 +396,7 @@ class GameSession(
             null -> "(no output)"
             else -> value.toString()
         }
-        return raw.replace("\n", " ").take(220)
+        return raw.replace("\n", " ")
     }
 
     private suspend fun handleDiceRoll(character: Character, result: ActionResult): ActionResult {
@@ -744,7 +744,7 @@ class GameSession(
         toStringPattern.find(stepResult)?.groupValues?.get(1)
             ?.trim()?.let { return it }
 
-        return stepResult.take(200).ifBlank {
+        return stepResult.ifBlank {
             "$characterName looks around cautiously."
         }
     }
