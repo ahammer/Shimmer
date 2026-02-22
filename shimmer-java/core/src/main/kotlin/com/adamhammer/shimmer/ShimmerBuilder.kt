@@ -1,5 +1,6 @@
 package com.adamhammer.shimmer
 
+import com.adamhammer.shimmer.adapters.CachingAdapter
 import com.adamhammer.shimmer.context.DefaultContextBuilder
 import com.adamhammer.shimmer.context.InMemoryStore
 import com.adamhammer.shimmer.interfaces.ApiAdapter
@@ -27,7 +28,8 @@ import kotlin.reflect.KClass
 class ShimmerInstance<T : Any>(
     val api: T,
     val memoryStore: MemoryStore,
-    val klass: KClass<T>
+    val klass: KClass<T>,
+    val usage: UsageTracker = UsageTracker()
 ) {
     /**
      * Returns the memory store backing this instance.
@@ -64,6 +66,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     private val listeners = mutableListOf<RequestListener>()
     private var resiliencePolicy: ResiliencePolicy = ResiliencePolicy()
     private val typeAdapterRegistry = TypeAdapterRegistry()
+    private var cacheConfig: CacheConfig? = null
 
     // ── DSL-style configuration ─────────────────────────────────────────────
 
@@ -121,6 +124,12 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         return this
     }
 
+    /** Enable response caching with configurable TTL and max entries. */
+    fun cache(block: CacheConfig.() -> Unit = {}): ShimmerBuilder<T> {
+        this.cacheConfig = CacheConfig().apply(block)
+        return this
+    }
+
     /**
      * Register a [TypeAdapter] that bridges an external POJO to a `@Serializable` mirror type.
      *
@@ -158,15 +167,21 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     // ── Build ───────────────────────────────────────────────────────────────
 
     fun build(): ShimmerInstance<T> {
-        val resolvedAdapter = adapter
+        var resolvedAdapter = adapter
             ?: throw ShimmerConfigurationException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
 
+        cacheConfig?.let { config ->
+            resolvedAdapter = CachingAdapter(resolvedAdapter, config.ttlMs, config.maxEntries)
+        }
+
         val memoryStore = InMemoryStore()
+        val usageTracker = UsageTracker()
+        val allListeners = listeners.toList() + usageTracker
 
         val shimmer = Shimmer(
             resolvedAdapter, contextBuilder, interceptors.toList(),
             resiliencePolicy, toolProviders.toList(), memoryStore, apiInterface,
-            listeners.toList(), typeAdapterRegistry
+            allListeners, typeAdapterRegistry
         )
 
         val proxyInstance = Proxy.newProxyInstance(
@@ -175,7 +190,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
             shimmer
         )
 
-        return ShimmerInstance(apiInterface.java.cast(proxyInstance), memoryStore, apiInterface)
+        return ShimmerInstance(apiInterface.java.cast(proxyInstance), memoryStore, apiInterface, usageTracker)
     }
 }
 
@@ -203,6 +218,18 @@ class ResiliencePolicyBuilder {
         maxConcurrentRequests = maxConcurrentRequests,
         maxRequestsPerMinute = maxRequestsPerMinute
     )
+}
+
+/**
+ * Configuration for response caching.
+ *
+ * @property ttlMs time-to-live for cache entries in milliseconds (default: 5 minutes)
+ * @property maxEntries maximum number of cached entries (default: 100)
+ */
+@ShimmerDsl
+class CacheConfig {
+    var ttlMs: Long = 300_000
+    var maxEntries: Int = 100
 }
 
 /**

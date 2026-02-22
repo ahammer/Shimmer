@@ -2,6 +2,7 @@ package com.adamhammer.shimmer
 
 import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.model.PromptContext
+import com.adamhammer.shimmer.model.UsageInfo
 import com.adamhammer.shimmer.test.MockAdapter
 import com.adamhammer.shimmer.test.SimpleResult
 import com.adamhammer.shimmer.test.SimpleTestAPI
@@ -20,7 +21,7 @@ class RequestListenerTest {
             override fun onRequestStart(context: PromptContext) {
                 startCalls.add(context)
             }
-            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long) {
+            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long, usage: UsageInfo?) {
                 completeCalls.add(durationMs)
             }
         }
@@ -81,7 +82,7 @@ class RequestListenerTest {
             override fun onRequestStart(context: PromptContext) {
                 listener1Events.add("start")
             }
-            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long) {
+            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long, usage: UsageInfo?) {
                 listener1Events.add("complete")
             }
         }
@@ -89,7 +90,7 @@ class RequestListenerTest {
             override fun onRequestStart(context: PromptContext) {
                 listener2Events.add("start")
             }
-            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long) {
+            override fun onRequestComplete(context: PromptContext, result: Any, durationMs: Long, usage: UsageInfo?) {
                 listener2Events.add("complete")
             }
         }

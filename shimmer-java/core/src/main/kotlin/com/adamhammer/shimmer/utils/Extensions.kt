@@ -20,7 +20,7 @@ import com.adamhammer.shimmer.annotations.Terminal
 import com.adamhammer.shimmer.model.MethodDescriptor
 import com.adamhammer.shimmer.model.ToolDefinition
 
-private val json = Json { prettyPrint = true }
+private val json = Json { prettyPrint = false }
 
 fun KClass<*>.toJsonStructure(): JsonElement = when {
     this == String::class -> JsonPrimitive("Text")

@@ -35,6 +35,7 @@ class OpenAiAdapterTest {
         every { mockClient.chat() } returns chatService
         every { chatService.completions() } returns completionService
         every { completionService.create(any<ChatCompletionCreateParams>()) } returns completion
+        every { completion.usage() } returns Optional.empty()
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of(responseText)
@@ -179,6 +180,7 @@ class OpenAiAdapterTest {
         every { mockClient.chat() } returns chatService
         every { chatService.completions() } returns completionService
         every { completionService.create(capture(capturedParams)) } returns completion
+        every { completion.usage() } returns Optional.empty()
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
@@ -210,6 +212,7 @@ class OpenAiAdapterTest {
         every { mockClient.chat() } returns chatService
         every { chatService.completions() } returns completionService
         every { completionService.create(capture(capturedParams)) } returns completion
+        every { completion.usage() } returns Optional.empty()
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")
@@ -254,6 +257,7 @@ class OpenAiAdapterTest {
         every { mockClient.chat() } returns chatService
         every { chatService.completions() } returns completionService
         every { completionService.create(any<ChatCompletionCreateParams>()) } returns completion
+        every { completion.usage() } returns Optional.empty()
         every { completion.choices() } returns emptyList()
 
         val context = PromptContext(
@@ -312,6 +316,7 @@ class OpenAiAdapterTest {
         every { mockClient.chat() } returns chatService
         every { chatService.completions() } returns completionService
         every { completionService.create(capture(capturedParams)) } returns completion
+        every { completion.usage() } returns Optional.empty()
         every { completion.choices() } returns listOf(choice)
         every { choice.message() } returns message
         every { message.content() } returns Optional.of("{\"value\": \"ok\"}")

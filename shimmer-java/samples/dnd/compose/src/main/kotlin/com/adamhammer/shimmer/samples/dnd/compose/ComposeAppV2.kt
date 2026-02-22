@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamhammer.shimmer.UsageTracker
 import org.jetbrains.skia.Image as SkiaImage
 import java.util.Base64
 
@@ -127,6 +128,43 @@ private fun SetupScreenV2(controller: ComposeGameControllerV2) {
             }
         }
 
+        // AI Configuration card
+        DarkCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("AI Configuration", style = MaterialTheme.typography.h6, color = BrightText)
+
+                Text("Text Generation", style = MaterialTheme.typography.subtitle2, color = DimText)
+                VendorSelector(
+                    vendors = Vendor.entries,
+                    selected = setup.textVendor,
+                    onSelect = { vendor ->
+                        controller.setupState = controller.setupState.copy(
+                            textVendor = vendor,
+                            textModel = vendor.defaultModel,
+                            imageVendor = if (!vendor.supportsImages && setup.imageVendor == vendor)
+                                Vendor.entries.first { it.supportsImages && it.isAvailable() }
+                            else setup.imageVendor
+                        )
+                    }
+                )
+                ModelDropdown(
+                    models = setup.textVendor.models,
+                    selected = setup.textModel,
+                    onSelect = { controller.setupState = controller.setupState.copy(textModel = it) }
+                )
+
+                if (setup.enableImages) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("Image Generation", style = MaterialTheme.typography.subtitle2, color = DimText)
+                    VendorSelector(
+                        vendors = Vendor.entries.filter { it.supportsImages },
+                        selected = setup.imageVendor,
+                        onSelect = { controller.setupState = controller.setupState.copy(imageVendor = it) }
+                    )
+                }
+            }
+        }
+
         // Party config card
         DarkCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -161,38 +199,6 @@ private fun SetupScreenV2(controller: ComposeGameControllerV2) {
                         label = { Text("Art Style") },
                         colors = darkTextFieldColors()
                     )
-                    Text("Image Quality", style = MaterialTheme.typography.subtitle2, color = DimText)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = setup.imageModel == com.openai.models.ImageModel.DALL_E_3,
-                                onClick = {
-                                    controller.setupState = controller.setupState.copy(
-                                        imageModel = com.openai.models.ImageModel.DALL_E_3,
-                                        imageSize = com.openai.models.ImageGenerateParams.Size._1024X1024
-                                    )
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = DmColor)
-                            )
-                            Text("High (DALL-E 3)", color = DimText)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = setup.imageModel == com.openai.models.ImageModel.DALL_E_2,
-                                onClick = {
-                                    controller.setupState = controller.setupState.copy(
-                                        imageModel = com.openai.models.ImageModel.DALL_E_2,
-                                        imageSize = com.openai.models.ImageGenerateParams.Size._256X256
-                                    )
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = DmColor)
-                            )
-                            Text("Low (DALL-E 2)", color = DimText)
-                        }
-                    }
                 }
             }
         }
@@ -284,32 +290,42 @@ private fun GameTimelineScreen(controller: ComposeGameControllerV2, isPostmortem
         // Sticky header bar
         StickyHeaderBar(controller, isPostmortem)
 
-        // The timeline
-        LazyColumn(
-            state = timelineState,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(vertical = 12.dp)
-        ) {
-            if (isPostmortem) {
-                item { PostmortemBanner(controller) }
-                item { Spacer(Modifier.height(8.dp)) }
-            }
-
-            items(controller.timelineEntries, key = { it.timestamp }) { entry ->
-                TimelineEntryCard(entry)
-            }
-
-            if (isPostmortem) {
-                item { Spacer(Modifier.height(12.dp)) }
-                item {
-                    Button(
-                        onClick = { controller.backToSetup() },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(backgroundColor = DmColor)
-                    ) { Text("← Back to Setup", color = Color.White) }
+        // Timeline + floating usage pane overlay
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = timelineState,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                if (isPostmortem) {
+                    item { PostmortemBanner(controller) }
+                    item { Spacer(Modifier.height(8.dp)) }
                 }
-                item { Spacer(Modifier.height(16.dp)) }
+
+                items(controller.timelineEntries, key = { it.timestamp }) { entry ->
+                    TimelineEntryCard(entry)
+                }
+
+                if (isPostmortem) {
+                    item { Spacer(Modifier.height(12.dp)) }
+                    item {
+                        Button(
+                            onClick = { controller.backToSetup() },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(backgroundColor = DmColor)
+                        ) { Text("← Back to Setup", color = Color.White) }
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
+            }
+
+            // Floating usage pane
+            if (controller.showUsagePane) {
+                UsagePane(
+                    tracker = controller.usageTracker,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp)
+                )
             }
         }
     }
@@ -340,6 +356,16 @@ private fun StickyHeaderBar(controller: ComposeGameControllerV2, isPostmortem: B
                 Text(controller.world.location.name, style = MaterialTheme.typography.subtitle1, color = BrightText)
 
                 Spacer(Modifier.weight(1f))
+
+                // Usage pane toggle
+                TextButton(
+                    onClick = { controller.showUsagePane = !controller.showUsagePane },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = if (controller.showUsagePane) DmColor else DimText
+                    )
+                ) {
+                    Text("💰", fontSize = 14.sp)
+                }
 
                 if (!isPostmortem && controller.isBusy) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = DmColor)
@@ -693,6 +719,99 @@ private fun SystemMessageCard(entry: TimelineEntry.SystemMessage) {
     }
 }
 
+// ── Floating Usage Pane ─────────────────────────────────────────────────────
+
+@Composable
+private fun UsagePane(tracker: UsageTracker, modifier: Modifier = Modifier) {
+    val stats = tracker.stats()
+    val totalCost = tracker.totalCost()
+    val totalTokens = tracker.totalTokens()
+    val totalRequests = tracker.totalRequests()
+
+    Card(
+        modifier = modifier.widthIn(min = 180.dp, max = 260.dp),
+        backgroundColor = DarkCardAlt.copy(alpha = 0.95f),
+        shape = RoundedCornerShape(10.dp),
+        elevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("Usage", style = MaterialTheme.typography.subtitle2, color = DmColor)
+
+            stats.values.forEach { model ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        model.model.take(20),
+                        style = MaterialTheme.typography.overline,
+                        color = BrightText
+                    )
+                    Text(
+                        "${model.requestCount} req",
+                        style = MaterialTheme.typography.overline,
+                        color = DimText
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${formatTokens(model.totalInputTokens)}↑ ${formatTokens(model.totalOutputTokens)}↓",
+                        style = MaterialTheme.typography.overline,
+                        color = DimText
+                    )
+                    if (model.totalCost > 0.0) {
+                        Text(
+                            "$${formatCost(model.totalCost)}",
+                            style = MaterialTheme.typography.overline,
+                            color = DiceColor
+                        )
+                    }
+                }
+            }
+
+            if (stats.size > 1 || stats.isNotEmpty()) {
+                Divider(color = DimText.copy(alpha = 0.2f), thickness = 1.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "$totalRequests req · ${formatTokens(totalTokens)} tok",
+                        style = MaterialTheme.typography.overline,
+                        color = BrightText
+                    )
+                    if (totalCost > 0.0) {
+                        Text(
+                            "$${formatCost(totalCost)}",
+                            style = MaterialTheme.typography.overline,
+                            fontWeight = FontWeight.Bold,
+                            color = DiceColor
+                        )
+                    }
+                }
+            }
+
+            if (stats.isEmpty()) {
+                Text("No usage yet", style = MaterialTheme.typography.overline, color = DimText)
+            }
+        }
+    }
+}
+
+private fun formatTokens(count: Long): String = when {
+    count >= 1_000_000 -> "%.1fM".format(count / 1_000_000.0)
+    count >= 1_000 -> "%.1fK".format(count / 1_000.0)
+    else -> count.toString()
+}
+
+private fun formatCost(cost: Double): String = "%.4f".format(cost)
+
 // ── Reusable Components ─────────────────────────────────────────────────────
 
 @Composable
@@ -769,5 +888,78 @@ private fun decodeBase64(base64Data: String): ImageBitmap? {
         SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap()
     } catch (_: Exception) {
         null
+    }
+}
+
+// ── Vendor / Model Picker Components ────────────────────────────────────────
+
+@Composable
+private fun VendorSelector(
+    vendors: List<Vendor>,
+    selected: Vendor,
+    onSelect: (Vendor) -> Unit
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        vendors.forEach { vendor ->
+            val available = vendor.isAvailable()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = selected == vendor,
+                    onClick = { if (available) onSelect(vendor) },
+                    enabled = available,
+                    colors = RadioButtonDefaults.colors(selectedColor = DmColor)
+                )
+                Column {
+                    Text(
+                        vendor.displayName,
+                        color = if (available) DimText else DimText.copy(alpha = 0.3f)
+                    )
+                    if (!available) {
+                        Text(
+                            vendor.envVarName + " not set",
+                            style = MaterialTheme.typography.overline,
+                            color = ErrorColor.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelDropdown(
+    models: List<ModelOption>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = models.find { it.id == selected }?.displayName ?: selected
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrightText)
+        ) {
+            Text(selectedLabel)
+            Spacer(Modifier.width(4.dp))
+            Text("▾", color = DimText)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            models.forEach { model ->
+                DropdownMenuItem(onClick = {
+                    onSelect(model.id)
+                    expanded = false
+                }) {
+                    Text(model.displayName)
+                }
+            }
+        }
     }
 }

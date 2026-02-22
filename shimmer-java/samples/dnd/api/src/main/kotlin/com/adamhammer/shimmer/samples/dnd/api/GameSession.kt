@@ -1,6 +1,7 @@
 package com.adamhammer.shimmer.samples.dnd.api
 
 import com.adamhammer.shimmer.interfaces.ApiAdapter
+import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.agents.AutonomousAgent
 import com.adamhammer.shimmer.agents.DecidingAgentAPI
 import com.adamhammer.shimmer.agents.AgentDispatcher
@@ -23,7 +24,8 @@ class GameSession(
     private val listener: GameEventListener,
     maxTurns: Int = 3,
     private val enableImages: Boolean = true,
-    private val artStyle: String = "Anime"
+    private val artStyle: String = "Anime",
+    private val requestListeners: List<RequestListener> = emptyList()
 ) {
     companion object {
         private const val DEFAULT_MAX_TURNS = 3
@@ -51,6 +53,7 @@ class GameSession(
         dm = shimmer<DungeonMasterAPI> {
             adapter(apiAdapter)
             addInterceptor(WorldStateInterceptor { world })
+            requestListeners.forEach { listener(it) }
             resilience {
                 maxRetries = 2
                 retryDelayMs = 500
@@ -84,6 +87,7 @@ class GameSession(
         val worldBuilder = shimmer<DungeonMasterWorldBuilderAPI> {
             adapter(apiAdapter)
             addInterceptor(WorldStateInterceptor { world })
+            requestListeners.forEach { listener(it) }
             resilience {
                 maxRetries = 2
                 retryDelayMs = 500
@@ -482,6 +486,7 @@ class GameSession(
                     }
                 )
                 toolProvider(toolProvider)
+                requestListeners.forEach { listener(it) }
                 resilience { maxRetries = 1 }
             }
 
@@ -500,6 +505,7 @@ class GameSession(
                     }
                 )
                 toolProvider(toolProvider)
+                requestListeners.forEach { listener(it) }
                 resilience {
                     maxRetries = 2
                     resultValidator = { r ->

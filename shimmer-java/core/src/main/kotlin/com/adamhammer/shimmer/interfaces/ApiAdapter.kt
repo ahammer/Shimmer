@@ -1,5 +1,6 @@
 package com.adamhammer.shimmer.interfaces
 
+import com.adamhammer.shimmer.model.AdapterResponse
 import com.adamhammer.shimmer.model.PromptContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -34,6 +35,31 @@ interface ApiAdapter {
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R = handleRequest(context, resultClass)
+
+    /**
+     * Single-shot request that also returns token-usage metadata.
+     *
+     * The default implementation delegates to [handleRequest] and returns
+     * no usage info. Vendor adapters override this to extract usage from
+     * the provider response.
+     */
+    suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>
+    ): AdapterResponse<R> = AdapterResponse(handleRequest(context, resultClass))
+
+    /**
+     * Request with tool-calling support that also returns token-usage metadata.
+     *
+     * The default implementation delegates to [handleRequest] and returns
+     * no usage info. Vendor adapters override this to extract usage from
+     * the provider response.
+     */
+    suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): AdapterResponse<R> = AdapterResponse(handleRequest(context, resultClass, toolProviders))
 
     /**
      * Streaming request — returns tokens as they arrive.

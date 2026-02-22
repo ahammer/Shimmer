@@ -2,19 +2,23 @@ package com.adamhammer.shimmer.adapters
 
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ToolProvider
+import com.adamhammer.shimmer.model.AdapterResponse
 import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.model.MessageRole
+import com.adamhammer.shimmer.model.ModelPricing
 import com.adamhammer.shimmer.model.PromptContext
 import com.adamhammer.shimmer.model.ShimmerAdapterException
 import com.adamhammer.shimmer.model.ShimmerDeserializationException
 import com.adamhammer.shimmer.model.ToolCall
 import com.adamhammer.shimmer.model.ToolDefinition
 import com.adamhammer.shimmer.model.ToolResult
+import com.adamhammer.shimmer.model.UsageInfo
 import com.adamhammer.shimmer.utils.toJsonSchema
 import com.anthropic.client.AnthropicClient
 import com.anthropic.client.okhttp.AnthropicOkHttpClient
 import com.anthropic.core.JsonValue
 import com.anthropic.helpers.MessageAccumulator
+import com.anthropic.models.messages.CacheControlEphemeral
 import com.anthropic.models.messages.ContentBlock
 import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.Message
@@ -62,7 +66,8 @@ class ClaudeAdapter(
     private val model: String = "claude-sonnet-4-20250514",
     client: AnthropicClient? = null,
     private val maxToolRounds: Int = 10,
-    private val maxTokens: Long = 8192
+    private val maxTokens: Long = 8192,
+    private val pricing: ModelPricing = ModelPricing()
 ) : ApiAdapter {
     private val logger = Logger.getLogger(ClaudeAdapter::class.java.name)
 
@@ -74,13 +79,13 @@ class ClaudeAdapter(
 
     private val json = Json {
         ignoreUnknownKeys = true
-        prettyPrint = true
+        prettyPrint = false
     }
 
     // ── ApiAdapter overrides ───────────────────────────────────────────────
 
     override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
-        return handleRequestInternal(context, resultClass, emptyList())
+        return handleRequestInternal(context, resultClass, emptyList()).result
     }
 
     override suspend fun <R : Any> handleRequest(
@@ -88,6 +93,21 @@ class ClaudeAdapter(
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R {
+        return handleRequestInternal(context, resultClass, toolProviders).result
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>
+    ): AdapterResponse<R> {
+        return handleRequestInternal(context, resultClass, emptyList())
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): AdapterResponse<R> {
         return handleRequestInternal(context, resultClass, toolProviders)
     }
 
@@ -96,7 +116,7 @@ class ClaudeAdapter(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
-    ): R {
+    ): AdapterResponse<R> {
         if (resultClass == ImageResult::class) {
             throw ShimmerAdapterException(
                 "Claude does not support image generation. " +
@@ -113,11 +133,17 @@ class ClaudeAdapter(
         val systemPrompt = buildSystemPrompt(context, resultClass)
         val tools = if (hasTools) allToolDefs.map { it.toAnthropicTool() } else null
 
+        var totalInputTokens = 0L
+        var totalOutputTokens = 0L
+
         for (round in 1..maxToolRounds) {
             logger.fine { "Round $round — sending request with ${messageAdders.size} message adder(s)" }
 
             val params = buildParams(messageAdders, systemPrompt, tools)
             val message: Message = client.messages().create(params)
+
+            totalInputTokens += message.usage().inputTokens()
+            totalOutputTokens += message.usage().outputTokens()
 
             val toolUseBlocks = extractToolUseBlocks(message)
 
@@ -128,7 +154,15 @@ class ClaudeAdapter(
                         "No text content in response from Claude API", context = context
                     )
                 }
-                return deserializeResponse(text.trim(), resultClass, context)
+                val result = deserializeResponse(text.trim(), resultClass, context)
+                val usageInfo = UsageInfo(
+                    model = model,
+                    inputTokens = totalInputTokens,
+                    outputTokens = totalOutputTokens,
+                    inputCostPerToken = pricing.inputCostPerToken,
+                    outputCostPerToken = pricing.outputCostPerToken
+                )
+                return AdapterResponse(result, usageInfo)
             }
 
             // Replay the full assistant message (all content blocks including tool_use)
@@ -272,12 +306,27 @@ class ClaudeAdapter(
         systemPrompt: String,
         tools: List<Tool>?
     ): MessageCreateParams {
+        val cacheBreakpoint = CacheControlEphemeral.builder().build()
         val builder = MessageCreateParams.builder()
             .model(Model.of(model))
             .maxTokens(maxTokens)
-            .system(systemPrompt)
+            .systemOfTextBlockParams(listOf(
+                TextBlockParam.builder()
+                    .text(systemPrompt)
+                    .cacheControl(cacheBreakpoint)
+                    .build()
+            ))
         messageAdders.forEach { it(builder) }
-        tools?.forEach { builder.addTool(it) }
+        if (tools != null) {
+            tools.dropLast(1).forEach { builder.addTool(it) }
+            tools.lastOrNull()?.let { lastTool ->
+                builder.addTool(
+                    lastTool.toBuilder()
+                        .cacheControl(cacheBreakpoint)
+                        .build()
+                )
+            }
+        }
         return builder.build()
     }
 

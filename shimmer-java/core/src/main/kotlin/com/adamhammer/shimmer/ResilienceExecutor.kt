@@ -4,6 +4,7 @@ import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.interfaces.ToolProvider
 import com.adamhammer.shimmer.model.*
+import com.adamhammer.shimmer.model.UsageInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -37,14 +38,16 @@ class ResilienceExecutor(
         var lastException: Exception? = null
         val maxAttempts = resilience.maxRetries + 1
         var currentContext = context
+        var accumulatedUsage: UsageInfo? = null
 
         for (attempt in 1..maxAttempts) {
             try {
-                val result = executeWithTimeout(adapter, currentContext, resultClass, toolProviders)
+                val response = executeWithTimeout(adapter, currentContext, resultClass, toolProviders)
+                accumulatedUsage = mergeUsage(accumulatedUsage, response.usage)
 
                 val validator = resilience.resultValidator
                 if (validator != null) {
-                    val validationResult = validator(result)
+                    val validationResult = validator(response.result)
                     if (validationResult is ValidationResult.Invalid) {
                         throw ResultValidationException(validationResult.reason, currentContext)
                     } else if (validationResult == false) { // For backwards compatibility if validator returns Boolean
@@ -52,8 +55,8 @@ class ResilienceExecutor(
                     }
                 }
 
-                notifyComplete(currentContext, result, startMs)
-                return result
+                notifyComplete(currentContext, response.result, startMs, accumulatedUsage)
+                return response.result
             } catch (e: CancellationException) {
                 throw e // Always rethrow CancellationException to respect structured concurrency
             } catch (e: ResultValidationException) {
@@ -86,9 +89,10 @@ class ResilienceExecutor(
         if (fallback != null) {
             logger.info { "Primary adapter exhausted, trying fallback" }
             try {
-                val result = executeWithTimeout(fallback, currentContext, resultClass, toolProviders)
-                notifyComplete(currentContext, result, startMs)
-                return result
+                val response = executeWithTimeout(fallback, currentContext, resultClass, toolProviders)
+                accumulatedUsage = mergeUsage(accumulatedUsage, response.usage)
+                notifyComplete(currentContext, response.result, startMs, accumulatedUsage)
+                return response.result
             } catch (e: Exception) {
                 val ex = ShimmerException("All attempts failed including fallback", e, currentContext)
                 notifyError(currentContext, ex, startMs)
@@ -106,7 +110,7 @@ class ResilienceExecutor(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
-    ): R {
+    ): AdapterResponse<R> {
         if (resilience.timeoutMs <= 0) {
             return callAdapter(adapter, context, resultClass, toolProviders)
         }
@@ -120,23 +124,32 @@ class ResilienceExecutor(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
-    ): R = if (toolProviders.isNotEmpty()) {
-        adapter.handleRequest(context, resultClass, toolProviders)
+    ): AdapterResponse<R> = if (toolProviders.isNotEmpty()) {
+        adapter.handleRequestWithUsage(context, resultClass, toolProviders)
     } else {
-        adapter.handleRequest(context, resultClass)
+        adapter.handleRequestWithUsage(context, resultClass)
     }
 
     fun notifyStart(context: PromptContext) {
         listeners.forEach { it.onRequestStart(context) }
     }
 
-    fun notifyComplete(context: PromptContext, result: Any, startMs: Long) {
+    fun notifyComplete(context: PromptContext, result: Any, startMs: Long, usage: UsageInfo? = null) {
         val duration = System.currentTimeMillis() - startMs
-        listeners.forEach { it.onRequestComplete(context, result, duration) }
+        listeners.forEach { it.onRequestComplete(context, result, duration, usage) }
     }
 
     fun notifyError(context: PromptContext, error: Exception, startMs: Long) {
         val duration = System.currentTimeMillis() - startMs
         listeners.forEach { it.onRequestError(context, error, duration) }
+    }
+
+    private fun mergeUsage(existing: UsageInfo?, incoming: UsageInfo?): UsageInfo? {
+        if (incoming == null) return existing
+        if (existing == null) return incoming
+        return existing.copy(
+            inputTokens = existing.inputTokens + incoming.inputTokens,
+            outputTokens = existing.outputTokens + incoming.outputTokens
+        )
     }
 }

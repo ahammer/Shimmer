@@ -14,7 +14,7 @@ import kotlinx.serialization.json.Json
 @Suppress("LongMethod")
 class WorldStateInterceptor(private val isDm: Boolean = true, private val worldProvider: () -> World) : Interceptor {
 
-    private val json = Json { prettyPrint = true }
+    private val json = Json { prettyPrint = false }
 
     private fun escalationGuidance(round: Int, maxRounds: Int): String {
         val progress = if (maxRounds > 0) round.toFloat() / maxRounds else 1f

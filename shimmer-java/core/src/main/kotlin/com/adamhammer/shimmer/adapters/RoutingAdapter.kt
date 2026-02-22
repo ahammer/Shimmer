@@ -2,6 +2,7 @@ package com.adamhammer.shimmer.adapters
 
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ToolProvider
+import com.adamhammer.shimmer.model.AdapterResponse
 import com.adamhammer.shimmer.model.PromptContext
 import kotlinx.coroutines.flow.Flow
 import kotlin.reflect.KClass
@@ -32,6 +33,21 @@ class RoutingAdapter(
         toolProviders: List<ToolProvider>
     ): R {
         return router(context).handleRequest(context, resultClass, toolProviders)
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>
+    ): AdapterResponse<R> {
+        return router(context).handleRequestWithUsage(context, resultClass)
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): AdapterResponse<R> {
+        return router(context).handleRequestWithUsage(context, resultClass, toolProviders)
     }
 
     override fun handleRequestStreaming(

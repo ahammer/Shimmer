@@ -2,13 +2,16 @@ package com.adamhammer.shimmer.adapters
 
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ToolProvider
+import com.adamhammer.shimmer.model.AdapterResponse
 import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.model.MessageRole
+import com.adamhammer.shimmer.model.ModelPricing
 import com.adamhammer.shimmer.model.PromptContext
 import com.adamhammer.shimmer.model.ShimmerDeserializationException
 import com.adamhammer.shimmer.model.ToolCall
 import com.adamhammer.shimmer.model.ToolDefinition
 import com.adamhammer.shimmer.model.ToolResult
+import com.adamhammer.shimmer.model.UsageInfo
 import com.adamhammer.shimmer.utils.toJsonSchema
 import com.google.genai.Client
 import com.google.genai.ResponseStream
@@ -58,7 +61,8 @@ class GeminiAdapter(
     private val model: String = "gemini-2.5-pro",
     client: Client? = null,
     private val maxToolRounds: Int = 10,
-    private val imageModel: String = "imagen-3.0-generate-002"
+    private val imageModel: String = "imagen-3.0-generate-002",
+    private val pricing: ModelPricing = ModelPricing()
 ) : ApiAdapter {
     private val logger = Logger.getLogger(GeminiAdapter::class.java.name)
 
@@ -71,11 +75,11 @@ class GeminiAdapter(
 
     private val json = Json {
         ignoreUnknownKeys = true
-        prettyPrint = true
+        prettyPrint = false
     }
 
     override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
-        return handleRequestInternal(context, resultClass, emptyList())
+        return handleRequestInternal(context, resultClass, emptyList()).result
     }
 
     override suspend fun <R : Any> handleRequest(
@@ -83,6 +87,21 @@ class GeminiAdapter(
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R {
+        return handleRequestInternal(context, resultClass, toolProviders).result
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>
+    ): AdapterResponse<R> {
+        return handleRequestInternal(context, resultClass, emptyList())
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): AdapterResponse<R> {
         return handleRequestInternal(context, resultClass, toolProviders)
     }
 
@@ -90,10 +109,10 @@ class GeminiAdapter(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
-    ): R {
+    ): AdapterResponse<R> {
         if (resultClass == ImageResult::class) {
             @Suppress("UNCHECKED_CAST")
-            return handleImageRequest(context) as R
+            return AdapterResponse(handleImageRequest(context) as R)
         }
 
         val userPrompt = buildUserPrompt(context)
@@ -103,11 +122,19 @@ class GeminiAdapter(
         val contents = buildContentList(context, userPrompt)
         val config = buildConfig(context, resultClass, if (hasTools) allToolDefs else emptyList())
 
+        var totalInputTokens = 0L
+        var totalOutputTokens = 0L
+
         for (round in 1..maxToolRounds) {
             logger.fine { "Round $round — sending request with ${contents.size} content(s)" }
 
             val response: GenerateContentResponse =
                 client.models.generateContent(model, contents, config)
+
+            response.usageMetadata().ifPresent { meta ->
+                meta.promptTokenCount().ifPresent { totalInputTokens += it }
+                meta.candidatesTokenCount().ifPresent { totalOutputTokens += it }
+            }
 
             val candidate = response.candidates().orElse(null)?.firstOrNull()
                 ?: throw ShimmerDeserializationException(
@@ -122,7 +149,15 @@ class GeminiAdapter(
                     ?: throw ShimmerDeserializationException(
                         "No text in response from Gemini API", context = context
                     )
-                return deserializeResponse(text.trim(), resultClass, context)
+                val result = deserializeResponse(text.trim(), resultClass, context)
+                val usageInfo = UsageInfo(
+                    model = model,
+                    inputTokens = totalInputTokens,
+                    outputTokens = totalOutputTokens,
+                    inputCostPerToken = pricing.inputCostPerToken,
+                    outputCostPerToken = pricing.outputCostPerToken
+                )
+                return AdapterResponse(result, usageInfo)
             }
 
             // Add model response with function calls to conversation

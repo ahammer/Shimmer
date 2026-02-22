@@ -16,9 +16,7 @@ class ClassSchemaTest {
 
     @Test
     fun testAnswerSchema() {
-        val expect = """{
-    "answer": "A resoundingly deep answer to the question"
-}"""
+        val expect = """{"answer":"A resoundingly deep answer to the question"}"""
         val result = Answer::class.toJsonStructureString()
         assertEquals(expect, result)
     }
@@ -35,9 +33,7 @@ class ClassSchemaTest {
 
     @Test
     fun testEnumSchema() {
-        val expect = """{
-    "color": "Enum color (RED/GREEN/BLUE)"
-}"""
+        val expect = """{"color":"Enum color (RED/GREEN/BLUE)"}"""
         val result = EnumHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
@@ -52,12 +48,7 @@ class ClassSchemaTest {
 
     @Test
     fun testListSchema() {
-        val expect = """{
-    "items": [
-        "A list of items"
-    ]
-}"""
-
+        val expect = """{"items":["A list of items"]}"""
         val result = ListHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
@@ -80,11 +71,7 @@ class ClassSchemaTest {
 
     @Test
     fun testMapSchema() {
-        val expect = """{
-    "mapping": {
-        "key": "value"
-    }
-}"""
+        val expect = """{"mapping":{"key":"value"}}"""
         val result = MapHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
@@ -106,11 +93,7 @@ class ClassSchemaTest {
 
     @Test
     fun testObjectSchema() {
-        val expect = """{
-    "nested": {
-        "field": "Nested field"
-    }
-}"""
+        val expect = """{"nested":{"field":"Nested field"}}"""
         val result = ObjectHolder::class.toJsonStructureString()
         assertEquals(expect, result)
     }
@@ -135,22 +118,7 @@ class ClassSchemaTest {
 
     @Test
     fun testComplexSchema() {
-        val expect = """{
-    "color": "Enum color (RED/GREEN/BLUE)",
-    "list": [
-        "A list of strings"
-    ],
-    "map": {
-        "key": "value"
-    },
-    "nested": {
-        "field": "Nested field"
-    },
-    "primitive": "A simple string",
-    "set": [
-        "A set of strings"
-    ]
-}"""
+        val expect = """{"color":"Enum color (RED/GREEN/BLUE)","list":["A list of strings"],"map":{"key":"value"},"nested":{"field":"Nested field"},"primitive":"A simple string","set":["A set of strings"]}"""
         val result = Complex::class.toJsonStructureString()
         assertEquals(expect, result)
     }

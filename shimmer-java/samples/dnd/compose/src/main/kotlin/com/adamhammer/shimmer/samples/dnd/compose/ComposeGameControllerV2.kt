@@ -5,7 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.adamhammer.shimmer.UsageTracker
+import com.adamhammer.shimmer.adapters.ClaudeAdapter
+import com.adamhammer.shimmer.adapters.GeminiAdapter
 import com.adamhammer.shimmer.adapters.OpenAiAdapter
+import com.adamhammer.shimmer.adapters.RoutingAdapter
+import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.CharacterUtils
 import com.adamhammer.shimmer.samples.dnd.DungeonMasterAPI
@@ -13,15 +18,12 @@ import com.adamhammer.shimmer.samples.dnd.api.GameEventListener
 import com.adamhammer.shimmer.samples.dnd.api.GameSession
 import com.adamhammer.shimmer.samples.dnd.model.*
 import com.adamhammer.shimmer.shimmer
-import com.openai.models.ImageGenerateParams
-import com.openai.models.ImageModel
+import com.openai.models.ChatModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class ComposeGameControllerV2(private val uiScope: CoroutineScope) : GameEventListener {
-
-    private val adapter = OpenAiAdapter()
 
     var screen by mutableStateOf(AppScreen.SETUP)
         private set
@@ -44,6 +46,10 @@ class ComposeGameControllerV2(private val uiScope: CoroutineScope) : GameEventLi
         private set
 
     val timelineEntries = mutableStateListOf<TimelineEntry>()
+
+    val usageTracker = UsageTracker()
+
+    var showUsagePane by mutableStateOf(false)
 
     // Track pending action per character so we can merge action + outcome
     private val pendingActions = mutableMapOf<String, TimelineEntry.CharacterAction>()
@@ -102,17 +108,19 @@ class ComposeGameControllerV2(private val uiScope: CoroutineScope) : GameEventLi
 
         uiScope.launch(Dispatchers.IO) {
             try {
-                val initialWorld = buildInitialWorld(setupState)
-                val sessionAdapter = OpenAiAdapter(
-                    imageModel = setupState.imageModel,
-                    imageSize = setupState.imageSize
-                )
+                val textAdapter = createAdapter(setupState.textVendor, setupState.textModel)
+                val imageAdapter = createAdapter(setupState.imageVendor, setupState.imageVendor.defaultModel)
+                val sessionAdapter = RoutingAdapter { context ->
+                    if (context.methodName == "generateImage") imageAdapter else textAdapter
+                }
+                val initialWorld = buildInitialWorld(setupState, sessionAdapter)
                 val session = GameSession(
                     apiAdapter = sessionAdapter,
                     listener = this@ComposeGameControllerV2,
                     maxTurns = setupState.maxRounds,
                     enableImages = setupState.enableImages,
-                    artStyle = setupState.artStyle
+                    artStyle = setupState.artStyle,
+                    requestListeners = listOf(usageTracker)
                 )
                 uiScope.launch {
                     world = initialWorld
@@ -362,19 +370,30 @@ class ComposeGameControllerV2(private val uiScope: CoroutineScope) : GameEventLi
         }
     }
 
+    private fun createAdapter(vendor: Vendor, model: String): ApiAdapter = when (vendor) {
+        Vendor.OPENAI -> OpenAiAdapter(model = ChatModel.of(model))
+        Vendor.ANTHROPIC -> ClaudeAdapter(model = model)
+        Vendor.GEMINI -> GeminiAdapter(model = model)
+    }
+
     private fun normalizeError(message: String?): String {
         val text = message?.trim().orEmpty()
         return when {
             text.contains("OPENAI_API_KEY", ignoreCase = true) ->
                 "OPENAI_API_KEY is missing. Set it before starting."
+            text.contains("ANTHROPIC_API_KEY", ignoreCase = true) ->
+                "ANTHROPIC_API_KEY is missing. Set it before starting."
+            text.contains("GEMINI_API_KEY", ignoreCase = true) ||
+                text.contains("GOOGLE_API_KEY", ignoreCase = true) ->
+                "GEMINI_API_KEY (or GOOGLE_API_KEY) is missing. Set it before starting."
             text.isBlank() -> "Failed to start game"
             else -> text
         }
     }
 
-    private fun buildInitialWorld(state: SetupState): World {
+    private fun buildInitialWorld(state: SetupState, apiAdapter: ApiAdapter): World {
         val backstoryDm = shimmer<DungeonMasterAPI> {
-            adapter(adapter)
+            adapter(apiAdapter)
             resilience { maxRetries = 1 }
         }.api
 

@@ -21,6 +21,8 @@ dependencies {
     implementation compose.ui
     implementation project(':shimmer-core')
     implementation project(':shimmer-openai')
+    implementation project(':shimmer-claude')
+    implementation project(':shimmer-gemini')
     implementation project(':shimmer-agents')
     implementation project(':samples-dnd:models')
     implementation project(':samples-dnd:api')

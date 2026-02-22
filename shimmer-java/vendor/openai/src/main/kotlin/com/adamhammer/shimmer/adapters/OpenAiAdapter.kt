@@ -2,7 +2,10 @@ package com.adamhammer.shimmer.adapters
 
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ToolProvider
+import com.adamhammer.shimmer.model.AdapterResponse
+import com.adamhammer.shimmer.model.ModelPricing
 import com.adamhammer.shimmer.model.PromptContext
+import com.adamhammer.shimmer.model.UsageInfo
 import com.adamhammer.shimmer.model.MessageRole
 import com.adamhammer.shimmer.model.ToolCall
 import com.adamhammer.shimmer.model.ToolDefinition
@@ -63,7 +66,8 @@ class OpenAiAdapter(
     client: OpenAIClient? = null,
     private val maxToolRounds: Int = 10,
     private val imageModel: ImageModel = ImageModel.DALL_E_3,
-    private val imageSize: ImageGenerateParams.Size = ImageGenerateParams.Size._1024X1024
+    private val imageSize: ImageGenerateParams.Size = ImageGenerateParams.Size._1024X1024,
+    private val pricing: ModelPricing = ModelPricing()
 ) : ApiAdapter {
     private val logger = Logger.getLogger(OpenAiAdapter::class.java.name)
 
@@ -78,11 +82,11 @@ class OpenAiAdapter(
 
     private val json = Json {
         ignoreUnknownKeys = true
-        prettyPrint = true
+        prettyPrint = false
     }
 
     override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
-        return handleRequestInternal(context, resultClass, emptyList())
+        return handleRequestInternal(context, resultClass, emptyList()).result
     }
 
     override suspend fun <R : Any> handleRequest(
@@ -90,6 +94,21 @@ class OpenAiAdapter(
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
     ): R {
+        return handleRequestInternal(context, resultClass, toolProviders).result
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>
+    ): AdapterResponse<R> {
+        return handleRequestInternal(context, resultClass, emptyList())
+    }
+
+    override suspend fun <R : Any> handleRequestWithUsage(
+        context: PromptContext,
+        resultClass: KClass<R>,
+        toolProviders: List<ToolProvider>
+    ): AdapterResponse<R> {
         return handleRequestInternal(context, resultClass, toolProviders)
     }
 
@@ -97,10 +116,10 @@ class OpenAiAdapter(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
-    ): R {
+    ): AdapterResponse<R> {
         if (resultClass == ImageResult::class) {
             @Suppress("UNCHECKED_CAST")
-            return handleImageRequest(context) as R
+            return AdapterResponse(handleImageRequest(context) as R)
         }
 
         val userPrompt = buildUserPrompt(context)
@@ -114,12 +133,21 @@ class OpenAiAdapter(
             buildJsonSchemaResponseFormat(resultClass)
         } else null
 
+        var totalInputTokens = 0L
+        var totalOutputTokens = 0L
+
         for (round in 1..maxToolRounds) {
             val params = buildParams(messages, tools, responseFormat)
 
             logger.fine { "Round $round — sending request with ${messages.size} message(s), ${tools?.size ?: 0} tool(s)" }
 
             val chatCompletion: ChatCompletion = client.chat().completions().create(params)
+
+            chatCompletion.usage().ifPresent { usage ->
+                totalInputTokens += usage.promptTokens()
+                totalOutputTokens += usage.completionTokens()
+            }
+
             val choice = chatCompletion.choices().firstOrNull()
                 ?: throw ShimmerDeserializationException("No response from OpenAI API", context = context)
 
@@ -129,7 +157,15 @@ class OpenAiAdapter(
             if (toolCalls.isNullOrEmpty()) {
                 val completionText = assistantMessage.content().orElse(null)?.trim()
                     ?: throw ShimmerDeserializationException("No content in final response from OpenAI API", context = context)
-                return deserializeResponse(completionText, resultClass, context)
+                val result = deserializeResponse(completionText, resultClass, context)
+                val usageInfo = UsageInfo(
+                    model = model.toString(),
+                    inputTokens = totalInputTokens,
+                    outputTokens = totalOutputTokens,
+                    inputCostPerToken = pricing.inputCostPerToken,
+                    outputCostPerToken = pricing.outputCostPerToken
+                )
+                return AdapterResponse(result, usageInfo)
             }
 
             messages.add(ChatCompletionMessageParam.ofAssistant(
