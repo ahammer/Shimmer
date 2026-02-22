@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.jetbrains.skia.Image as SkiaImage
@@ -567,7 +566,7 @@ private fun CharacterActionCard(entry: TimelineEntry.CharacterAction) {
                     )
                     if (entry.outcome.isNotBlank()) {
                         Divider(color = color.copy(alpha = 0.2f))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Top) {
                             val icon = when (entry.success) {
                                 true -> "✓"
                                 false -> "✗"
@@ -577,7 +576,8 @@ private fun CharacterActionCard(entry: TimelineEntry.CharacterAction) {
                             Text(
                                 entry.outcome,
                                 style = MaterialTheme.typography.body2,
-                                color = outcomeColor
+                                color = outcomeColor,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -607,8 +607,6 @@ private fun CharacterThinkingCard(entry: TimelineEntry.CharacterThinking) {
             text = "${entry.characterName} → ${entry.methodName}: ${entry.details}",
             style = MaterialTheme.typography.caption,
             color = ThinkingColor,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
     }
@@ -637,7 +635,8 @@ private fun DiceRollCard(entry: TimelineEntry.DiceRoll) {
                 Text(
                     "${entry.characterName} — ${entry.rollType} vs DC ${entry.difficulty}",
                     style = MaterialTheme.typography.caption,
-                    color = DiceColor
+                    color = DiceColor,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -664,7 +663,8 @@ private fun WhisperCard(entry: TimelineEntry.Whisper) {
                     "${entry.from} whispers to ${entry.to}: \"${entry.message}\"",
                     style = MaterialTheme.typography.caption,
                     fontStyle = FontStyle.Italic,
-                    color = WhisperColor
+                    color = WhisperColor,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
