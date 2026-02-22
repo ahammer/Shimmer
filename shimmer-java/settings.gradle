@@ -1,0 +1,34 @@
+pluginManagement {
+    plugins {
+        id 'org.jetbrains.kotlin.jvm' version '2.0.21'
+        id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
+    }
+}
+rootProject.name = 'shimmer'
+
+// Core
+include 'shimmer-core'
+project(':shimmer-core').projectDir = file('core')
+
+// Vendor adapters
+include 'shimmer-openai'
+project(':shimmer-openai').projectDir = file('vendor/openai')
+include 'shimmer-gemini'
+project(':shimmer-gemini').projectDir = file('vendor/gemini')
+include 'shimmer-claude'
+project(':shimmer-claude').projectDir = file('vendor/claude')
+
+// Extensions
+include 'shimmer-agents'
+project(':shimmer-agents').projectDir = file('ext/agents')
+include 'shimmer-mcp'
+project(':shimmer-mcp').projectDir = file('ext/mcp')
+include 'shimmer-test'
+project(':shimmer-test').projectDir = file('ext/test')
+include 'shimmer-debug'
+project(':shimmer-debug').projectDir = file('ext/debug')
+
+// Samples
+include 'samples-dnd'
+project(':samples-dnd').projectDir = file('samples/dnd')
+include 'samples-dnd:models', 'samples-dnd:api', 'samples-dnd:cli', 'samples-dnd:compose'
