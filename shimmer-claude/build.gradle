@@ -1,0 +1,76 @@
+plugins {
+    id 'java-library'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'maven-publish'
+}
+
+test {
+    useJUnitPlatform {
+        if (!project.hasProperty('liveTests')) {
+            excludeTags 'live'
+        }
+    }
+    testLogging {
+        outputs.upToDateWhen { false }
+        showStandardStreams = true
+    }
+}
+
+dependencies {
+    api project(':shimmer-core')
+    api "com.anthropic:anthropic-java:2.15.0"
+    testImplementation project(':shimmer-test')
+    testImplementation project(':shimmer-agents')
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation "io.mockk:mockk:1.13.10"
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            artifactId = 'shimmer-claude'
+
+            versionMapping {
+                usage('java-api') { fromResolutionOf('runtimeClasspath') }
+                usage('java-runtime') { fromResolutionResult() }
+            }
+
+            pom {
+                name = 'Shimmer Claude'
+                description = 'Anthropic Claude adapter for the Shimmer AI proxy library.'
+                url = 'https://github.com/AdamHammer/Shimmer'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'adamhammer'
+                        name = 'Adam Hammer'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/AdamHammer/Shimmer.git'
+                    developerConnection = 'scm:git:ssh://github.com/AdamHammer/Shimmer.git'
+                    url = 'https://github.com/AdamHammer/Shimmer'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'local'
+            url = layout.buildDirectory.dir('repo')
+        }
+    }
+}

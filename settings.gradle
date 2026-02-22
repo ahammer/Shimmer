@@ -5,5 +5,5 @@ pluginManagement {
     }
 }
 rootProject.name = 'shimmer'
-include 'shimmer-core', 'shimmer-agents', 'shimmer-test', 'shimmer-openai', 'shimmer-gemini', 'shimmer-mcp', 'shimmer-debug'
+include 'shimmer-core', 'shimmer-agents', 'shimmer-test', 'shimmer-openai', 'shimmer-gemini', 'shimmer-claude', 'shimmer-mcp', 'shimmer-debug'
 include 'samples-dnd:models', 'samples-dnd:api', 'samples-dnd:cli', 'samples-dnd:compose'
