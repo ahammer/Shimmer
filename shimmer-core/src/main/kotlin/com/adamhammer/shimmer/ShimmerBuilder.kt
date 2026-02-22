@@ -8,9 +8,11 @@ import com.adamhammer.shimmer.interfaces.Interceptor
 import com.adamhammer.shimmer.interfaces.MemoryStore
 import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.interfaces.ToolProvider
+import com.adamhammer.shimmer.interfaces.TypeAdapter
 import com.adamhammer.shimmer.model.PromptContext
 import com.adamhammer.shimmer.model.ResiliencePolicy
 import com.adamhammer.shimmer.model.ShimmerConfigurationException
+import com.adamhammer.shimmer.model.TypeAdapterRegistry
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
 
@@ -61,6 +63,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     private val toolProviders = mutableListOf<ToolProvider>()
     private val listeners = mutableListOf<RequestListener>()
     private var resiliencePolicy: ResiliencePolicy = ResiliencePolicy()
+    private val typeAdapterRegistry = TypeAdapterRegistry()
 
     // ── DSL-style configuration ─────────────────────────────────────────────
 
@@ -118,6 +121,18 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         return this
     }
 
+    /**
+     * Register a [TypeAdapter] that bridges an external POJO to a `@Serializable` mirror type.
+     *
+     * When Shimmer encounters the POJO as a parameter or return type, it will
+     * transparently swap it for the mirror type during schema generation, serialization,
+     * and deserialization, then convert back to the POJO for the caller.
+     */
+    fun typeAdapter(adapter: TypeAdapter<*, *>): ShimmerBuilder<T> {
+        typeAdapterRegistry.register(adapter)
+        return this
+    }
+
     // ── Legacy Java-style API (kept for backward compatibility) ─────────────
 
     fun <U : ApiAdapter> setAdapterClass(adapterClass: KClass<U>): ShimmerBuilder<T> {
@@ -151,7 +166,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         val shimmer = Shimmer(
             resolvedAdapter, contextBuilder, interceptors.toList(),
             resiliencePolicy, toolProviders.toList(), memoryStore, apiInterface,
-            listeners.toList()
+            listeners.toList(), typeAdapterRegistry
         )
 
         val proxyInstance = Proxy.newProxyInstance(

@@ -43,7 +43,8 @@ class Shimmer(
     private val toolProviders: List<ToolProvider> = emptyList(),
     private val memoryStore: MemoryStore,
     private val klass: KClass<*>,
-    listeners: List<RequestListener> = emptyList()
+    listeners: List<RequestListener> = emptyList(),
+    private val typeAdapterRegistry: TypeAdapterRegistry = TypeAdapterRegistry()
 ) : InvocationHandler {
 
     private val resilienceExecutor = ResilienceExecutor(resilience, listeners)
@@ -98,16 +99,18 @@ class Shimmer(
                 val clazz = actualType as? Class<*>
                     ?: throw UnsupportedOperationException("Expected a class type as the generic parameter")
                 val kClass = clazz.kotlin
-                val context = buildContext(method, args?.toList(), kClass)
+                val mirrorClass = typeAdapterRegistry.mirrorClassFor(kClass)
+                val bridgedArgs = args?.map { typeAdapterRegistry.convertArg(it) }?.toTypedArray()
+                val context = buildContext(method, bridgedArgs?.toList(), mirrorClass)
 
                 rateLimiter?.acquireSuspend()
                 concurrencySemaphore?.acquire()
                 try {
                     val result = resilienceExecutor.execute(
-                        adapter, context, kClass, toolProviders
+                        adapter, context, mirrorClass, toolProviders
                     )
                     if (memorizeKey != null) memoryStore.put(memorizeKey, result.toJsonString())
-                    result
+                    typeAdapterRegistry.convertResult(result, kClass)
                 } finally {
                     concurrencySemaphore?.release()
                 }
@@ -141,18 +144,20 @@ class Shimmer(
         } else {
             String::class
         }
+        val mirrorClass = typeAdapterRegistry.mirrorClassFor(resultClass)
+        val bridgedArgs = realArgs?.map { typeAdapterRegistry.convertArg(it) }?.toTypedArray()
 
         val block: suspend () -> Any? = {
-            val context = buildContext(method, realArgs?.toList(), resultClass)
+            val context = buildContext(method, bridgedArgs?.toList(), mirrorClass)
 
             rateLimiter?.acquireSuspend()
             concurrencySemaphore?.acquire()
             try {
                 val result = resilienceExecutor.execute(
-                    adapter, context, resultClass, toolProviders
+                    adapter, context, mirrorClass, toolProviders
                 )
                 if (memorizeKey != null) memoryStore.put(memorizeKey, result.toJsonString())
-                result
+                typeAdapterRegistry.convertResult(result, resultClass)
             } finally {
                 concurrencySemaphore?.release()
             }
