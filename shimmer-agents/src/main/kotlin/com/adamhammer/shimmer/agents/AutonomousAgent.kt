@@ -8,6 +8,7 @@ import com.adamhammer.shimmer.annotations.AiSchema
 import com.adamhammer.shimmer.annotations.Memorize
 import com.adamhammer.shimmer.annotations.Terminal
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Future
 
@@ -55,28 +56,36 @@ class AutonomousAgent<T : Any>(
 ) {
     private val dispatcher = AgentDispatcher(apiInstance)
 
-    fun step(): String {
-        return stepDetailed().value?.toString() ?: ""
+    fun step(): String = runBlocking {
+        stepDetailedSuspend().value?.toString() ?: ""
     }
 
-    fun stepDetailed(excludedMethods: Set<String> = emptySet()): AgentDispatcher.DispatchResult {
+    fun stepDetailed(excludedMethods: Set<String> = emptySet()): AgentDispatcher.DispatchResult = runBlocking {
+        stepDetailedSuspend(excludedMethods)
+    }
+
+    suspend fun stepSuspend(): String {
+        return stepDetailedSuspend().value?.toString() ?: ""
+    }
+
+    suspend fun stepDetailedSuspend(excludedMethods: Set<String> = emptySet()): AgentDispatcher.DispatchResult {
         val decision = decider.decide(apiInstance, excludedMethods).get()
         return dispatcher.dispatchWithMetadata(decision)
     }
 
-    suspend fun stepSuspend(): String = withContext(Dispatchers.IO) {
-        step()
+    fun run(maxSteps: Int): String = runBlocking {
+        runDetailedSuspend(maxSteps).value?.toString() ?: ""
     }
 
-    suspend fun stepDetailedSuspend(): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
-        stepDetailed()
+    fun runDetailed(maxSteps: Int): AgentDispatcher.DispatchResult = runBlocking {
+        runDetailedSuspend(maxSteps)
     }
 
-    fun run(maxSteps: Int): String {
-        return runDetailed(maxSteps).value?.toString() ?: ""
+    suspend fun runSuspend(maxSteps: Int): String {
+        return runDetailedSuspend(maxSteps).value?.toString() ?: ""
     }
 
-    fun runDetailed(maxSteps: Int): AgentDispatcher.DispatchResult {
+    suspend fun runDetailedSuspend(maxSteps: Int): AgentDispatcher.DispatchResult {
         require(maxSteps > 0) { "maxSteps must be > 0" }
 
         var lastResult = AgentDispatcher.DispatchResult(
@@ -85,7 +94,7 @@ class AutonomousAgent<T : Any>(
             isTerminal = false
         )
         repeat(maxSteps) {
-            val dispatchResult = stepDetailed()
+            val dispatchResult = stepDetailedSuspend()
             lastResult = dispatchResult
             if (dispatchResult.isTerminal) {
                 return dispatchResult
@@ -100,25 +109,17 @@ class AutonomousAgent<T : Any>(
         return lastResult
     }
 
-    suspend fun runSuspend(maxSteps: Int): String = withContext(Dispatchers.IO) {
-        run(maxSteps)
-    }
-
-    suspend fun runDetailedSuspend(maxSteps: Int): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
-        runDetailed(maxSteps)
-    }
-
     fun invoke(
+        methodName: String,
+        args: Map<String, String> = emptyMap()
+    ): AgentDispatcher.DispatchResult = runBlocking {
+        invokeSuspend(methodName, args)
+    }
+
+    suspend fun invokeSuspend(
         methodName: String,
         args: Map<String, String> = emptyMap()
     ): AgentDispatcher.DispatchResult = dispatcher.dispatchWithMetadata(
         AiDecision(method = methodName, argsMap = args)
     )
-
-    suspend fun invokeSuspend(
-        methodName: String,
-        args: Map<String, String> = emptyMap()
-    ): AgentDispatcher.DispatchResult = withContext(Dispatchers.IO) {
-        invoke(methodName, args)
-    }
 }

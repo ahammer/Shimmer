@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength")
 package com.adamhammer.shimmer.samples.dnd
 
 import com.adamhammer.shimmer.annotations.*

@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength")
 package com.adamhammer.shimmer.samples.dnd.compose
 
 data class BakedCharacter(

@@ -3,6 +3,7 @@ package com.adamhammer.shimmer.samples.dnd.api
 import com.adamhammer.shimmer.model.ImageResult
 import com.adamhammer.shimmer.samples.dnd.model.*
 
+@Suppress("TooManyFunctions")
 interface GameEventListener {
     fun onWorldBuildingStep(step: String, details: String) {}
     fun onAgentStep(

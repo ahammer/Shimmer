@@ -13,7 +13,7 @@ import kotlin.reflect.KClass
  */
 interface ApiAdapter {
     /** Single-shot request — no tool calling. */
-    fun <R : Any> handleRequest(
+    suspend fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>
     ): R
@@ -29,7 +29,7 @@ interface ApiAdapter {
      * The default implementation ignores tool providers and delegates to the
      * single-shot [handleRequest].
      */
-    fun <R : Any> handleRequest(
+    suspend fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
@@ -44,7 +44,7 @@ interface ApiAdapter {
      */
     fun handleRequestStreaming(
         context: PromptContext
-    ): Flow<String> = flowOf(handleRequest(context, String::class))
+    ): Flow<String> = kotlinx.coroutines.flow.flow { emit(handleRequest(context, String::class)) }
 
     /**
      * Streaming request with tool-calling support.

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
  * Interceptor that injects the current world state into the system instructions
  * so the AI Dungeon Master always knows the full game context.
  */
+@Suppress("LongMethod")
 class WorldStateInterceptor(private val isDm: Boolean = true, private val worldProvider: () -> World) : Interceptor {
 
     private val json = Json { prettyPrint = true }

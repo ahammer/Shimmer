@@ -23,8 +23,8 @@ class TimeoutTest {
     @Test
     fun `executeWithTimeout throws ShimmerTimeoutException on slow adapter`() {
         val slowAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
-                Thread.sleep(5000)
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+                kotlinx.coroutines.delay(5000)
                 @Suppress("UNCHECKED_CAST")
                 return SimpleResult("slow") as R
             }
@@ -35,7 +35,7 @@ class TimeoutTest {
 
         try {
             val innerFuture = CompletableFuture.supplyAsync({
-                slowAdapter.handleRequest(context, SimpleResult::class)
+                kotlinx.coroutines.runBlocking { slowAdapter.handleRequest(context, SimpleResult::class) }
             }, executor)
 
             assertThrows(TimeoutException::class.java) {
@@ -82,7 +82,7 @@ class TimeoutTest {
     fun `resilience retries on adapter failure`() {
         var callCount = 0
         val flakeyAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 callCount++
                 if (callCount < 3) throw RuntimeException("Transient failure $callCount")
                 @Suppress("UNCHECKED_CAST")

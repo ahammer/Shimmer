@@ -31,14 +31,14 @@ class DslAndFallbackTest {
     }
 
     @Test
-    fun `shimmer DSL exposes memory through instance`() {
+    fun `shimmer DSL exposes memory through instance`() = runBlocking {
         val mock = MockAdapter.scripted("stored")
         val instance = shimmer<MemoryTestAPI> {
             adapter(mock)
         }
 
         instance.api.store("test").get()
-        assertTrue(instance.memory.containsKey("stored-value"))
+        assertTrue(instance.memoryStore.getAll().containsKey("stored-value"))
     }
 
     // ── @AiResponse fallback type extraction tests ──────────────────────────

@@ -13,6 +13,12 @@ import com.adamhammer.shimmer.annotations.AiResponse
 import com.adamhammer.shimmer.annotations.AiParameter
 import com.adamhammer.shimmer.annotations.Terminal
 
+/**
+ * A single named argument for an [AiDecision].
+ *
+ * @param name the parameter name (must match the target method's parameter name)
+ * @param value the parameter value as a string
+ */
 @Serializable
 @AiSchema(title = "AI Argument", description = "A single named argument")
 data class AiArg(
@@ -22,6 +28,12 @@ data class AiArg(
     val value: String
 )
 
+/**
+ * Represents the AI's choice of which method to call next, along with its arguments.
+ *
+ * @param method the name of the method to invoke on the target API
+ * @param args the named arguments to pass to the method
+ */
 @Serializable
 @AiSchema(title = "AI Decision", description = "Look at the current state and options and decide what to do next")
 data class AiDecision(
@@ -38,6 +50,12 @@ data class AiDecision(
     fun argsMap(): Map<String, String> = args.associate { it.name to it.value }
 }
 
+/**
+ * Extension that asks the [DecidingAgentAPI] to choose the next action for a given [ShimmerInstance].
+ *
+ * @param shimmerInstance the target API instance whose methods are available for selection
+ * @param excludedMethods method names to exclude from the decision (e.g., already-called methods)
+ */
 fun <T : Any> DecidingAgentAPI.decide(
     shimmerInstance: ShimmerInstance<T>,
     excludedMethods: Set<String> = emptySet()
@@ -46,9 +64,17 @@ fun <T : Any> DecidingAgentAPI.decide(
     return decideNextAction(schema)
 }
 
+/** Suspend-friendly version of [decide]. */
 suspend fun <T : Any> DecidingAgentAPI.decideSuspend(shimmerInstance: ShimmerInstance<T>): AiDecision =
     withContext(Dispatchers.IO) { decide(shimmerInstance).get() }
 
+/**
+ * Interface for an AI that selects which method to call on a target API.
+ *
+ * Used by [AutonomousAgent] to drive multi-step agent loops: at each step the
+ * deciding agent inspects the available methods (via a JSON schema) and returns
+ * an [AiDecision] identifying which method to invoke and with what arguments.
+ */
 interface DecidingAgentAPI {
     @AiOperation(
         summary = "Decide Next Action",

@@ -17,6 +17,7 @@ import java.util.Base64
 import kotlin.concurrent.thread
 import kotlin.random.Random
 
+@Suppress("LongMethod", "LargeClass", "CyclomaticComplexMethod", "TooManyFunctions", "SwallowedException", "MaxLineLength")
 class GameSession(
     private val apiAdapter: ApiAdapter,
     private val listener: GameEventListener,
@@ -252,7 +253,7 @@ class GameSession(
         if (agent != null) {
             try {
                 val observedStep = try {
-                    agent.invoke("observeSituation")
+                    agent.invokeSuspend("observeSituation")
                 } catch (e: Exception) {
                     AgentDispatcher.DispatchResult(
                         methodName = "observeSituation",
@@ -282,7 +283,7 @@ class GameSession(
 
                 for (stepIndex in 1..AGENT_TURN_BUDGET) {
                     val stepResult = try {
-                        agent.stepDetailed(excludedMethods = currentExcludedMethods)
+                        agent.stepDetailedSuspend(excludedMethods = currentExcludedMethods)
                     } catch (e: Exception) {
                         listener.onAgentStep(
                             characterName = character.name,
@@ -293,7 +294,7 @@ class GameSession(
                             pointsSpent = stepIndex,
                             pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
                         )
-                        agent.invoke("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
+                        agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
                     }
                     turnHistory += "${stepResult.methodName}: ${summarizeStepValue(stepResult.value)}"
                     currentExcludedMethods.add(stepResult.methodName)
@@ -334,7 +335,7 @@ class GameSession(
                     return playerAction
                 }
 
-                val fallbackTerminal = agent.invoke("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
+                val fallbackTerminal = agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
                 turnHistory += "${fallbackTerminal.methodName}: ${summarizeStepValue(fallbackTerminal.value)}"
                 turnStates[character.name] = TurnState(
                     phase = if (fallbackTerminal.isTerminal) "DONE" else "PLAN",

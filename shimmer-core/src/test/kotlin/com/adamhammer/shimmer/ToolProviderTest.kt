@@ -76,7 +76,7 @@ class ToolProviderTest {
     }
 
     @Test
-    fun `MockToolProvider captures calls and verifies count`() {
+    fun `MockToolProvider captures calls and verifies count`() = kotlinx.coroutines.runBlocking {
         val mockTools = MockToolProvider.builder()
             .tool(calculatorTool)
             .handler("calculator") { call ->
@@ -95,7 +95,7 @@ class ToolProviderTest {
     }
 
     @Test
-    fun `MockToolProvider returns error for unhandled tool without default`() {
+    fun `MockToolProvider returns error for unhandled tool without default`() = kotlinx.coroutines.runBlocking {
         val mockTools = MockToolProvider.builder()
             .tool("known", "A tool", """{"type":"object","properties":{}}""")
             .build()
@@ -105,7 +105,7 @@ class ToolProviderTest {
     }
 
     @Test
-    fun `MockToolProvider dynamic factory works`() {
+    fun `MockToolProvider dynamic factory works`() = kotlinx.coroutines.runBlocking {
         val tools = listOf(calculatorTool)
         val provider = MockToolProvider.dynamic(tools) { call ->
             ToolResult(call.id, call.toolName, "dynamic-result")

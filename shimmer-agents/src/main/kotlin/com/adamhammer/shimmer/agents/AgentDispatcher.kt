@@ -2,8 +2,14 @@ package com.adamhammer.shimmer.agents
 
 import com.adamhammer.shimmer.ShimmerInstance
 import com.adamhammer.shimmer.annotations.Terminal
-import java.lang.reflect.Method
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Future
+import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
+import kotlin.reflect.KParameter
+import kotlin.reflect.full.callSuspendBy
+import kotlin.reflect.full.declaredFunctions
+import kotlin.reflect.full.hasAnnotation
 
 /**
  * Generic reflective dispatcher that invokes methods on a [ShimmerInstance]
@@ -27,7 +33,7 @@ class AgentDispatcher<T : Any>(
         val isTerminal: Boolean
     )
 
-    private val methodMap: Map<String, Method> = shimmerInstance.klass.java.declaredMethods
+    private val methodMap: Map<String, KFunction<*>> = shimmerInstance.klass.declaredFunctions
         .associateBy { it.name }
 
     /**
@@ -39,19 +45,19 @@ class AgentDispatcher<T : Any>(
      * @return the result of the method invocation (unwrapped from Future if applicable)
      * @throws IllegalArgumentException if the method is not found or arguments cannot be resolved
      */
-    fun dispatch(decision: AiDecision): Any? = dispatchWithMetadata(decision).value
+    fun dispatch(decision: AiDecision): Any? = runBlocking { dispatchWithMetadata(decision).value }
 
-    fun dispatchWithMetadata(decision: AiDecision): DispatchResult {
+    suspend fun dispatchWithMetadata(decision: AiDecision): DispatchResult {
         val method = methodMap[decision.method]
             ?: throw IllegalArgumentException(
                 "Unknown method '${decision.method}'. Available: ${methodMap.keys}"
             )
 
         val args = resolveArguments(method, decision.argsMap())
-        val result = if (args.isEmpty()) {
-            method.invoke(shimmerInstance.api)
+        val result = if (method.isSuspend) {
+            method.callSuspendBy(args)
         } else {
-            method.invoke(shimmerInstance.api, *args.toTypedArray())
+            method.callBy(args)
         }
 
         // Unwrap Future results
@@ -59,7 +65,7 @@ class AgentDispatcher<T : Any>(
         return DispatchResult(
             methodName = method.name,
             value = value,
-            isTerminal = method.isAnnotationPresent(Terminal::class.java)
+            isTerminal = method.hasAnnotation<Terminal>()
         )
     }
 
@@ -68,56 +74,47 @@ class AgentDispatcher<T : Any>(
             ?: throw IllegalArgumentException(
                 "Unknown method '$methodName'. Available: ${methodMap.keys}"
             )
-        return method.isAnnotationPresent(Terminal::class.java)
+        return method.hasAnnotation<Terminal>()
     }
 
     fun firstParameterlessTerminalMethodName(): String? = methodMap.values
         .firstOrNull { method ->
-            method.parameterCount == 0 && method.isAnnotationPresent(Terminal::class.java)
+            method.parameters.size == 1 && method.hasAnnotation<Terminal>() // 1 parameter is the instance itself
         }
         ?.name
 
-    private fun resolveArguments(method: Method, args: Map<String, String>): List<Any?> {
-        checkParameterNames(method)
-        return method.parameters.map { param ->
+    private fun resolveArguments(method: KFunction<*>, args: Map<String, String>): Map<KParameter, Any?> {
+        val resolvedArgs = mutableMapOf<KParameter, Any?>()
+        
+        // The first parameter is always the instance itself
+        val instanceParam = method.parameters.first()
+        resolvedArgs[instanceParam] = shimmerInstance.api
+
+        val valueParams = method.parameters.drop(1)
+        
+        for (param in valueParams) {
             val value = args[param.name]
             if (value != null) {
-                coerceArgument(value, param.type)
-            } else if (args.size == 1 && method.parameterCount == 1) {
+                resolvedArgs[param] = coerceArgument(value, param.type.classifier as KClass<*>)
+            } else if (args.size == 1 && valueParams.size == 1) {
                 // If there's exactly one arg and one param, match by position
-                coerceArgument(args.values.first(), param.type)
-            } else if (method.parameterCount > 0 && args.isEmpty()) {
+                resolvedArgs[param] = coerceArgument(args.values.first(), param.type.classifier as KClass<*>)
+            } else if (valueParams.isNotEmpty() && args.isEmpty() && !param.isOptional) {
                 require(false) {
-                    "Method '${method.name}' requires ${method.parameterCount} argument(s) but none were provided"
+                    "Method '${method.name}' requires ${valueParams.size} argument(s) but none were provided"
                 }
-            } else {
-                null
             }
         }
+        return resolvedArgs
     }
 
-    private fun coerceArgument(value: String, targetType: Class<*>): Any = when (targetType) {
-        String::class.java -> value
-        Int::class.java, java.lang.Integer::class.java -> value.toInt()
-        Long::class.java, java.lang.Long::class.java -> value.toLong()
-        Double::class.java, java.lang.Double::class.java -> value.toDouble()
-        Float::class.java, java.lang.Float::class.java -> value.toFloat()
-        Boolean::class.java, java.lang.Boolean::class.java -> value.toBoolean()
+    private fun coerceArgument(value: String, targetType: KClass<*>): Any = when (targetType) {
+        String::class -> value
+        Int::class -> value.toInt()
+        Long::class -> value.toLong()
+        Double::class -> value.toDouble()
+        Float::class -> value.toFloat()
+        Boolean::class -> value.toBoolean()
         else -> value
-    }
-
-    companion object {
-        private val SYNTHETIC_NAME = Regex("^arg\\d+$")
-
-        internal fun checkParameterNames(method: Method) {
-            val synthetic = method.parameters.filter { SYNTHETIC_NAME.matches(it.name) }
-            if (synthetic.isNotEmpty()) {
-                throw IllegalStateException(
-                    "Parameter names for '${method.name}' look synthetic (${synthetic.joinToString { it.name }}). " +
-                    "Ensure the compiler preserves real names by adding '-parameters' (javac) " +
-                    "or 'javaParameters = true' (kotlinc) to your build configuration."
-                )
-            }
-        }
     }
 }

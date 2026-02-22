@@ -60,7 +60,7 @@ class StubAdapterTest {
         )
 
         val ex = assertThrows(ShimmerConfigurationException::class.java) {
-            stub.handleRequest(context, NoDefaultArgs::class)
+            kotlinx.coroutines.runBlocking { stub.handleRequest(context, NoDefaultArgs::class) }
         }
         assertTrue(ex.message!!.contains("no no-arg constructor"),
             "Expected message about no-arg constructor, got: ${ex.message}")

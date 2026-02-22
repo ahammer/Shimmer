@@ -19,5 +19,5 @@ interface ToolProvider {
     fun listTools(): List<ToolDefinition>
 
     /** Executes a tool call and returns the result. */
-    fun callTool(call: ToolCall): ToolResult
+    suspend fun callTool(call: ToolCall): ToolResult
 }

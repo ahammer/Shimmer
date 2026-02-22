@@ -1,3 +1,4 @@
+@file:Suppress("LongMethod", "MaxLineLength")
 package com.adamhammer.shimmer.samples.dnd.compose
 
 import androidx.compose.foundation.Image

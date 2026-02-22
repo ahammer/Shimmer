@@ -12,7 +12,7 @@ import kotlin.reflect.KClass
  */
 class StubAdapter : ApiAdapter {
     @Suppress("UNCHECKED_CAST")
-    override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+    override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
         return when (resultClass) {
             String::class -> "" as R
             Int::class -> 0 as R

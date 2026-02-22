@@ -1,13 +1,14 @@
 package com.adamhammer.shimmer
 
 import com.adamhammer.shimmer.test.*
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class MemoryTest {
 
     @Test
-    fun `@Memorize stores result in memory map`() {
+    fun `@Memorize stores result in memory map`() = runBlocking {
         val mock = MockAdapter.scripted("stored-response", "recalled")
         val instance = ShimmerBuilder(MemoryTestAPI::class)
             .setAdapterDirect(mock)
@@ -15,12 +16,12 @@ class MemoryTest {
 
         instance.api.store("hello").get()
 
-        assertTrue(instance.memory.containsKey("stored-value"),
-            "Memory should contain the @Memorize label. Actual: ${instance.memory}")
+        assertTrue(instance.memoryStore.getAll().containsKey("stored-value"),
+            "Memory should contain the @Memorize label. Actual: ${instance.memoryStore.getAll()}")
     }
 
     @Test
-    fun `stored memory is passed to subsequent calls`() {
+    fun `stored memory is passed to subsequent calls`() = runBlocking {
         val mock = MockAdapter.scripted("first-result", "second-result")
         val instance = ShimmerBuilder(MemoryTestAPI::class)
             .setAdapterDirect(mock)
@@ -34,7 +35,7 @@ class MemoryTest {
     }
 
     @Test
-    fun `multiple @Memorize methods accumulate independently`() {
+    fun `multiple @Memorize methods accumulate independently`() = runBlocking {
         val mock = MockAdapter.scripted("alpha", "beta")
         val instance = ShimmerBuilder(MemoryTestAPI::class)
             .setAdapterDirect(mock)
@@ -44,12 +45,12 @@ class MemoryTest {
         instance.api.recall().get()
 
         // Memory values are stored as JSON (quoted strings)
-        assertEquals("\"alpha\"", instance.memory["stored-value"])
-        assertEquals("\"beta\"", instance.memory["recalled-value"])
+        assertEquals("\"alpha\"", instance.memoryStore.getAll()["stored-value"])
+        assertEquals("\"beta\"", instance.memoryStore.getAll()["recalled-value"])
     }
 
     @Test
-    fun `first call has empty memory`() {
+    fun `first call has empty memory`() = runBlocking {
         val mock = MockAdapter.scripted("result")
         val instance = ShimmerBuilder(MemoryTestAPI::class)
             .setAdapterDirect(mock)

@@ -19,7 +19,8 @@ class DefaultContextBuilder : ContextBuilder {
         return PromptContext(
             systemInstructions = SYSTEM_PREAMBLE,
             methodInvocation = methodInvocation,
-            memory = request.memory.toMap()
+            memory = request.memory.toMap(),
+            methodName = request.descriptor.name
         )
     }
 

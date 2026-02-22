@@ -30,6 +30,7 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 - **Streaming** — return `Flow<String>` for token-by-token streaming responses
 - **Annotation metadata** — describe operations, parameters, and response schemas for the AI
 - **Adapter pattern** — swap AI providers without changing your interface (OpenAI included)
+- **Multi-vendor routing** — route requests to different adapters per method (e.g., Anthropic for text, OpenAI for images)
 - **Tool calling** — multi-turn LLM↔tool loops with pluggable `ToolProvider` abstraction
 - **MCP support** — consume MCP server tools and expose Shimmer interfaces as MCP servers
 - **Context control** — replace or intercept the prompt pipeline with `ContextBuilder` and `Interceptor`
@@ -44,11 +45,12 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 
 | Module | Description |
 |--------|-------------|
-| `shimmer-core` | Core library — annotations, proxy, context pipeline, tool-calling abstractions, resilience. Zero AI-provider dependencies. |
+| `shimmer-core` | Core library — annotations, proxy, context pipeline, routing adapter, tool-calling abstractions, resilience. Zero AI-provider dependencies. |
 | `shimmer-openai` | OpenAI adapter — sends `PromptContext` to OpenAI with native tool-calling support. |
 | `shimmer-mcp` | MCP integration — consume MCP server tools via `McpToolProvider`, expose Shimmer interfaces as MCP servers via `ShimmerMcpServer`. |
 | `shimmer-agents` | Agent abstractions — `AutonomousAgent`, `DecidingAgent`, `AgentDispatcher` for multi-step AI workflows. |
 | `shimmer-test` | Test utilities — `MockAdapter`, `MockToolProvider`, prompt assertions, test fixtures, `shimmerTest<T>()` / `shimmerStub<T>()` helpers. |
+| `shimmer-debug` | Debug adapter — wraps any adapter and writes request/response markdown files for post-hoc inspection. |
 | `samples-dnd` | Sample app — a text-based D&D adventure with the AI as Dungeon Master. |
 
 ## Installation
@@ -354,12 +356,13 @@ Implement `ApiAdapter` to add support for other AI providers:
 
 ```kotlin
 class MyAdapter : ApiAdapter {
-    override fun <R : Any> handleRequest(
+    override suspend fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>
     ): R {
         // context.systemInstructions — the system preamble
         // context.methodInvocation   — JSON method + params + schema
+        // context.methodName         — the proxy method name (useful for routing)
         // context.memory             — accumulated memory map
         // context.conversationHistory — prior messages for multi-turn
         // context.properties         — custom data from interceptors
@@ -372,7 +375,7 @@ class MyAdapter : ApiAdapter {
     }
 
     // Override for multi-turn tool calling
-    override fun <R : Any> handleRequest(
+    override suspend fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
@@ -382,6 +385,57 @@ class MyAdapter : ApiAdapter {
         // 2. If LLM requests tool calls, dispatch via toolProviders
         // 3. Feed results back, repeat until final response
     }
+}
+```
+
+## Multi-Vendor Routing
+
+Use `RoutingAdapter` (or the lambda DSL overload) to route requests to different adapters based on the method name, properties, or any aspect of the `PromptContext`. This enables mixed-vendor solutions — for example, Anthropic for text completions and OpenAI for image generation:
+
+```kotlin
+val openAi = OpenAiAdapter(model = ChatModel.GPT_4O)
+val anthropic = AnthropicAdapter()   // your custom adapter
+
+val instance = shimmer<MyAPI> {
+    // Lambda adapter — receives PromptContext, returns the adapter to use
+    adapter { context ->
+        when (context.methodName) {
+            "generateImage" -> openAi
+            else            -> anthropic
+        }
+    }
+}
+```
+
+You can also route based on custom interceptor properties:
+
+```kotlin
+val instance = shimmer<MyAPI> {
+    adapter { context ->
+        val vendor = context.properties["vendor"] as? String
+        when (vendor) {
+            "openai"    -> openAiAdapter
+            "anthropic" -> anthropicAdapter
+            else        -> defaultAdapter
+        }
+    }
+    interceptor { ctx ->
+        // tag specific methods with a vendor
+        val vendor = if (ctx.methodName.startsWith("generate")) "openai" else "anthropic"
+        ctx.copy(properties = ctx.properties + ("vendor" to vendor))
+    }
+}
+```
+
+Or use `RoutingAdapter` directly if you prefer explicit construction:
+
+```kotlin
+val router = RoutingAdapter { context ->
+    if (context.methodName == "generateImage") openAi else anthropic
+}
+
+val instance = shimmer<MyAPI> {
+    adapter(router)
 }
 ```
 
@@ -519,8 +573,10 @@ Shimmer automatically generates MCP tool definitions from your `@AiOperation`, `
 | Adapter | Module | Purpose |
 |---------|--------|---------|
 | `OpenAiAdapter` | `shimmer-openai` | OpenAI API with native tool-calling support (configurable model, defaults to GPT-4o-mini) |
+| `RoutingAdapter` | `shimmer-core` | Routes requests to different adapters based on the `PromptContext` (multi-vendor support) |
 | `StubAdapter` | `shimmer-core` | Returns default-constructed instances for testing |
 | `MockAdapter` | `shimmer-test` | Configurable test adapter with scripted/dynamic responses and prompt capture |
+| `DebugAdapter` | `shimmer-debug` | Wraps any adapter, logging all requests/responses to markdown files on disk |
 | `McpToolProvider` | `shimmer-mcp` | Discovers and invokes tools from MCP servers |
 | `MockToolProvider` | `shimmer-test` | Configurable test tool provider with scripted handlers and call capture |
 

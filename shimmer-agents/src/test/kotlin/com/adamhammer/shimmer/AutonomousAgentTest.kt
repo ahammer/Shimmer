@@ -130,7 +130,7 @@ class AutonomousAgentTest {
     }
 
     @Test
-    fun `memory from @Memorize calls is forwarded to decider`() {
+    fun `memory from @Memorize calls is forwarded to decider`() = kotlinx.coroutines.runBlocking {
         val decisions = listOf(
             AiDecision("understand", mapOf<String, String>("data" to "hello")),
             AiDecision("analyze", emptyMap<String, String>())
@@ -153,15 +153,15 @@ class AutonomousAgentTest {
         agent.step()
 
         // The api instance should now have the memorized value
-        assertTrue(apiInstance.memory.containsKey("Users Intent"),
-            "Memory should contain 'Users Intent' after understand call. Actual: ${apiInstance.memory}")
+        assertTrue(apiInstance.memoryStore.getAll().containsKey("Users Intent"),
+            "Memory should contain 'Users Intent' after understand call. Actual: ${apiInstance.memoryStore.getAll()}")
 
         // Step 2: analyze → the decider should receive the accumulated memory
         agent.step()
 
         // Verify the api instance also has the second memorized value
-        assertTrue(apiInstance.memory.containsKey("analyze"),
-            "Memory should contain 'analyze' after analyze call. Actual: ${apiInstance.memory}")
+        assertTrue(apiInstance.memoryStore.getAll().containsKey("analyze"),
+            "Memory should contain 'analyze' after analyze call. Actual: ${apiInstance.memoryStore.getAll()}")
     }
 
     @Test

@@ -75,7 +75,7 @@ class McpToolProvider(
         }
     }
 
-    override fun callTool(call: ToolCall): ToolResult {
+    override suspend fun callTool(call: ToolCall): ToolResult {
         val arguments = parseArguments(call.arguments)
 
         val mcpResult = client.callTool(

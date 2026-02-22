@@ -3,6 +3,7 @@ package com.adamhammer.shimmer.model
 /**
  * Role for a message in a conversation history.
  */
+/** Role for a participant in a conversation: SYSTEM prompt, USER input, or ASSISTANT response. */
 enum class MessageRole { SYSTEM, USER, ASSISTANT }
 
 /**
@@ -40,7 +41,9 @@ data class PromptContext(
     val memory: Map<String, String>,
     val properties: Map<String, Any> = emptyMap(),
     val availableTools: List<ToolDefinition> = emptyList(),
-    val conversationHistory: List<Message> = emptyList()
+    val conversationHistory: List<Message> = emptyList(),
+    /** The name of the proxy method that initiated this request. Useful for routing. */
+    val methodName: String = ""
 ) {
     /** Read a typed property, returning null if absent or of the wrong type. */
     @Suppress("UNCHECKED_CAST")

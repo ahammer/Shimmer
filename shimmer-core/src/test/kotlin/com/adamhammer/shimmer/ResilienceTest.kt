@@ -41,7 +41,7 @@ class ResilienceTest {
         var callCount = 0
 
         val countingAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 callCount++
                 @Suppress("UNCHECKED_CAST")
                 return SimpleResult(value = if (callCount >= 3) "valid" else "") as R
@@ -69,13 +69,13 @@ class ResilienceTest {
     @Test
     fun `fallback adapter is used when primary exhausts retries`() {
         val failingAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 throw RuntimeException("Primary failed")
             }
         }
 
         val fallbackAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 @Suppress("UNCHECKED_CAST")
                 return SimpleResult(value = "fallback") as R
             }
@@ -99,7 +99,7 @@ class ResilienceTest {
     @Test
     fun `ShimmerException thrown when all retries and fallback fail`() {
         val failingAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 throw RuntimeException("Failed")
             }
         }
@@ -122,7 +122,7 @@ class ResilienceTest {
         var receivedInstructions = ""
 
         val capturingAdapter = object : ApiAdapter {
-            override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+            override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
                 receivedInstructions = context.systemInstructions
                 @Suppress("UNCHECKED_CAST")
                 return SimpleResult(value = "captured") as R

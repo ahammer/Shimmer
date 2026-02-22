@@ -1,3 +1,4 @@
+@file:Suppress("TooManyFunctions")
 package com.adamhammer.shimmer.samples.dnd.compose
 
 import androidx.compose.runtime.getValue

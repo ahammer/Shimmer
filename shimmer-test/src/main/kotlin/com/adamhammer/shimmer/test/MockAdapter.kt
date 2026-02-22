@@ -58,14 +58,14 @@ class MockAdapter private constructor(
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+    override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
         val callIndex = _callCounter.getAndIncrement()
         _capturedContexts.add(context)
 
         failOnCalls[callIndex]?.let { throw it }
 
         if (delayMs > 0) {
-            Thread.sleep(delayMs)
+            kotlinx.coroutines.delay(delayMs)
         }
 
         return responseProvider(callIndex, context, resultClass) as R

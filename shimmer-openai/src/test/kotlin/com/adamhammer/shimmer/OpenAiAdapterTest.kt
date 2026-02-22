@@ -93,7 +93,7 @@ class OpenAiAdapterTest {
     // ── handleRequest for data class results ───────────────────────────────
 
     @Test
-    fun `handleRequest deserializes JSON response to data class`() {
+    fun `handleRequest deserializes JSON response to data class`() = kotlinx.coroutines.runBlocking {
         stubCompletion("{\"value\": \"test-value\"}")
 
         val context = PromptContext(
@@ -107,7 +107,7 @@ class OpenAiAdapterTest {
     }
 
     @Test
-    fun `handleRequest extracts JSON from markdown code block`() {
+    fun `handleRequest extracts JSON from markdown code block`() = kotlinx.coroutines.runBlocking {
         stubCompletion("```json\n{\"value\": \"from-block\"}\n```")
 
         val context = PromptContext(
@@ -123,7 +123,7 @@ class OpenAiAdapterTest {
     // ── handleRequest for String results ───────────────────────────────────
 
     @Test
-    fun `handleRequest returns plain string for String result class`() {
+    fun `handleRequest returns plain string for String result class`() = kotlinx.coroutines.runBlocking {
         stubCompletion("Hello World")
 
         val context = PromptContext(
@@ -137,7 +137,7 @@ class OpenAiAdapterTest {
     }
 
     @Test
-    fun `handleRequest cleans Text marker for String result`() {
+    fun `handleRequest cleans Text marker for String result`() = kotlinx.coroutines.runBlocking {
         stubCompletion("\"Text\"")
 
         val context = PromptContext(
@@ -151,7 +151,7 @@ class OpenAiAdapterTest {
     }
 
     @Test
-    fun `handleRequest handles RESULT header for String result`() {
+    fun `handleRequest handles RESULT header for String result`() = kotlinx.coroutines.runBlocking {
         stubCompletion("# RESULT\nActual content here")
 
         val context = PromptContext(
@@ -167,7 +167,7 @@ class OpenAiAdapterTest {
     // ── memory formatting ──────────────────────────────────────────────────
 
     @Test
-    fun `handleRequest includes memory in prompt when present`() {
+    fun `handleRequest includes memory in prompt when present`() = kotlinx.coroutines.runBlocking {
         val capturedParams = slot<ChatCompletionCreateParams>()
 
         val chatService = mockk<com.openai.services.blocking.ChatService>()
@@ -198,7 +198,7 @@ class OpenAiAdapterTest {
     }
 
     @Test
-    fun `handleRequest omits memory section when memory is empty`() {
+    fun `handleRequest omits memory section when memory is empty`() = kotlinx.coroutines.runBlocking {
         val capturedParams = slot<ChatCompletionCreateParams>()
 
         val chatService = mockk<com.openai.services.blocking.ChatService>()
@@ -241,7 +241,7 @@ class OpenAiAdapterTest {
         )
 
         assertThrows(RuntimeException::class.java) {
-            adapter.handleRequest(context, SimpleResult::class)
+            kotlinx.coroutines.runBlocking { adapter.handleRequest(context, SimpleResult::class) }
         }
     }
 
@@ -263,14 +263,14 @@ class OpenAiAdapterTest {
         )
 
         assertThrows(RuntimeException::class.java) {
-            adapter.handleRequest(context, SimpleResult::class)
+            kotlinx.coroutines.runBlocking { adapter.handleRequest(context, SimpleResult::class) }
         }
     }
 
     // ── enum deserialization (offline) ──────────────────────────────────────
 
     @Test
-    fun `handleRequest deserializes enum result from JSON object`() {
+    fun `handleRequest deserializes enum result from JSON object`() = kotlinx.coroutines.runBlocking {
         stubCompletion("{\"color\": \"BLUE\"}")
 
         val context = PromptContext(
@@ -284,7 +284,7 @@ class OpenAiAdapterTest {
     }
 
     @Test
-    fun `handleRequest deserializes enum result wrapped in markdown`() {
+    fun `handleRequest deserializes enum result wrapped in markdown`() = kotlinx.coroutines.runBlocking {
         stubCompletion("```json\n{\"color\": \"GREEN\"}\n```")
 
         val context = PromptContext(
@@ -300,7 +300,7 @@ class OpenAiAdapterTest {
     // ── memory encoding ────────────────────────────────────────────────────
 
     @Test
-    fun `handleRequest embeds JSON memory values as structured JSON not escaped strings`() {
+    fun `handleRequest embeds JSON memory values as structured JSON not escaped strings`() = kotlinx.coroutines.runBlocking {
         val capturedParams = slot<ChatCompletionCreateParams>()
 
         val chatService = mockk<com.openai.services.blocking.ChatService>()

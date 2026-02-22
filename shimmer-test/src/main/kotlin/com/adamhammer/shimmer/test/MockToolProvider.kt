@@ -48,7 +48,7 @@ class MockToolProvider private constructor(
 
     override fun listTools(): List<ToolDefinition> = tools
 
-    override fun callTool(call: ToolCall): ToolResult {
+    override suspend fun callTool(call: ToolCall): ToolResult {
         _capturedCalls.add(call)
 
         val handler = handlers[call.toolName] ?: defaultHandler

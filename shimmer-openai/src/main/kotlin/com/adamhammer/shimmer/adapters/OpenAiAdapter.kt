@@ -45,6 +45,19 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.createType
 import java.util.logging.Logger
 
+/**
+ * [ApiAdapter] implementation for the OpenAI API.
+ *
+ * Supports chat completions, multi-turn tool calling, streaming, image generation,
+ * and structured JSON output via OpenAI's `response_format: json_schema`.
+ *
+ * @param model the chat model to use for completions (default: GPT-4o-mini)
+ * @param client an optional pre-configured [OpenAIClient]; if null, one is created from the `OPENAI_API_KEY` env var
+ * @param maxToolRounds the maximum number of tool-calling round-trips before giving up
+ * @param imageModel the model to use for image generation requests
+ * @param imageSize the default size for generated images
+ */
+@Suppress("TooManyFunctions")
 class OpenAiAdapter(
     private val model: ChatModel = ChatModel.GPT_4O_MINI,
     client: OpenAIClient? = null,
@@ -68,11 +81,11 @@ class OpenAiAdapter(
         prettyPrint = true
     }
 
-    override fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
+    override suspend fun <R : Any> handleRequest(context: PromptContext, resultClass: KClass<R>): R {
         return handleRequestInternal(context, resultClass, emptyList())
     }
 
-    override fun <R : Any> handleRequest(
+    override suspend fun <R : Any> handleRequest(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
@@ -80,7 +93,7 @@ class OpenAiAdapter(
         return handleRequestInternal(context, resultClass, toolProviders)
     }
 
-    private fun <R : Any> handleRequestInternal(
+    private suspend fun <R : Any> handleRequestInternal(
         context: PromptContext,
         resultClass: KClass<R>,
         toolProviders: List<ToolProvider>
@@ -108,15 +121,15 @@ class OpenAiAdapter(
 
             val chatCompletion: ChatCompletion = client.chat().completions().create(params)
             val choice = chatCompletion.choices().firstOrNull()
-                ?: throw ShimmerDeserializationException("No response from OpenAI API")
+                ?: throw ShimmerDeserializationException("No response from OpenAI API", context = context)
 
             val assistantMessage = choice.message()
             val toolCalls = assistantMessage.toolCalls().orElse(null)
 
             if (toolCalls.isNullOrEmpty()) {
                 val completionText = assistantMessage.content().orElse(null)?.trim()
-                    ?: throw ShimmerDeserializationException("No content in final response from OpenAI API")
-                return deserializeResponse(completionText, resultClass)
+                    ?: throw ShimmerDeserializationException("No content in final response from OpenAI API", context = context)
+                return deserializeResponse(completionText, resultClass, context)
             }
 
             messages.add(ChatCompletionMessageParam.ofAssistant(
@@ -128,7 +141,7 @@ class OpenAiAdapter(
             }
         }
 
-        throw ShimmerDeserializationException("Exceeded maximum tool-calling rounds ($maxToolRounds)")
+        throw ShimmerDeserializationException("Exceeded maximum tool-calling rounds ($maxToolRounds)", context = context)
     }
 
     private fun handleImageRequest(context: PromptContext): ImageResult {
@@ -140,7 +153,7 @@ class OpenAiAdapter(
             promptCompletion.choices().firstOrNull()?.message()?.content()?.orElse(null)?.trim()
                 ?.trim('"')
                 ?.ifBlank { null }
-                ?: throw ShimmerDeserializationException("No image prompt returned from OpenAI")
+                ?: throw ShimmerDeserializationException("No image prompt returned from OpenAI", context = context)
         }
 
         val imageResponse = client.images().generate(
@@ -153,10 +166,10 @@ class OpenAiAdapter(
         )
 
         val imageData = imageResponse.data().firstOrNull()
-            ?: throw ShimmerDeserializationException("No image data returned from OpenAI")
+            ?: throw ShimmerDeserializationException("No image data returned from OpenAI", context = context)
 
         val base64 = imageData.b64Json().orElse(null)
-            ?: throw ShimmerDeserializationException("No base64 image data returned from OpenAI")
+            ?: throw ShimmerDeserializationException("No base64 image data returned from OpenAI", context = context)
 
         return ImageResult(
             base64 = base64,
@@ -196,7 +209,7 @@ class OpenAiAdapter(
         return promptMessages
     }
 
-    private fun appendToolResult(
+    private suspend fun appendToolResult(
         messages: MutableList<ChatCompletionMessageParam>,
         tc: ChatCompletionMessageToolCall,
         toolIndex: Map<String, ToolProvider>
@@ -256,7 +269,10 @@ class OpenAiAdapter(
         return builder.build()
     }
 
-    private fun dispatchToolCall(call: ToolCall, toolIndex: Map<String, ToolProvider>): com.adamhammer.shimmer.model.ToolResult {
+    private suspend fun dispatchToolCall(
+        call: ToolCall, 
+        toolIndex: Map<String, ToolProvider>
+    ): com.adamhammer.shimmer.model.ToolResult {
         val provider = toolIndex[call.toolName]
             ?: return com.adamhammer.shimmer.model.ToolResult(
                 id = call.id,
@@ -435,7 +451,7 @@ class OpenAiAdapter(
             .build()
     }
 
-    private fun <R : Any> deserializeResponse(completionText: String, resultClass: KClass<R>): R {
+    private fun <R : Any> deserializeResponse(completionText: String, resultClass: KClass<R>, context: PromptContext): R {
         logger.fine { "Response:\n$completionText" }
 
         if (resultClass == String::class) {
@@ -460,7 +476,8 @@ class OpenAiAdapter(
         } catch (e: Exception) {
             throw ShimmerDeserializationException(
                 "Failed to deserialize response into ${resultClass.simpleName}: ${e.message}\nRaw response: $jsonResponse",
-                e
+                e,
+                context
             )
         }
     }

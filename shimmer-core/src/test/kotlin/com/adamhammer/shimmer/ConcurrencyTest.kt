@@ -31,7 +31,7 @@ class ConcurrencyTest {
     }
 
     @Test
-    fun `concurrent Future calls with @Memorize do not throw ConcurrentModificationException`() {
+    fun `concurrent Future calls with @Memorize do not throw ConcurrentModificationException`() = runBlocking {
         val mock = MockAdapter.builder()
             .dynamicResponse { _, _ -> SimpleResult("result") }
             .delayMs(10)
@@ -52,7 +52,7 @@ class ConcurrencyTest {
         }
 
         // Memory should contain the key (value may be any of the writes)
-        assertTrue(instance.memory.containsKey("item"))
+        assertTrue(instance.memoryStore.getAll().containsKey("item"))
         mock.verifyCallCount(20)
     }
 
@@ -77,7 +77,7 @@ class ConcurrencyTest {
             assertEquals("suspended", result.value)
         }
 
-        assertTrue(instance.memory.containsKey("item"))
+        assertTrue(instance.memoryStore.getAll().containsKey("item"))
         // MockAdapter's internal list is not thread-safe, so we only verify
         // that all 20 coroutines completed successfully without exceptions
         assertTrue(mock.callCount >= 1, "At least one call should have been recorded")

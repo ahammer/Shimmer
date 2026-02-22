@@ -1,32 +1,38 @@
 package com.adamhammer.shimmer
 
 import com.adamhammer.shimmer.context.DefaultContextBuilder
+import com.adamhammer.shimmer.context.InMemoryStore
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ContextBuilder
 import com.adamhammer.shimmer.interfaces.Interceptor
+import com.adamhammer.shimmer.interfaces.MemoryStore
 import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.interfaces.ToolProvider
 import com.adamhammer.shimmer.model.PromptContext
 import com.adamhammer.shimmer.model.ResiliencePolicy
 import com.adamhammer.shimmer.model.ShimmerConfigurationException
 import java.lang.reflect.Proxy
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
+/**
+ * A configured Shimmer proxy instance.
+ *
+ * @param T the interface type this instance implements
+ * @param api the dynamic proxy implementing [T], backed by the configured adapter
+ * @param memoryStore the memory store for persisting results across calls
+ * @param klass the [KClass] of the interface type
+ */
 class ShimmerInstance<T : Any>(
     val api: T,
-    private val backingMemory: MutableMap<String, String>,
+    val memoryStore: MemoryStore,
     val klass: KClass<T>
 ) {
-    /** Read-only view of the current memory map. */
-    val memory: Map<String, String> get() = backingMemory.toMap()
-
     /**
-     * Returns the mutable memory backing this instance.
+     * Returns the memory store backing this instance.
      * Intended for intra-library use only (e.g., agent dispatchers that need
      * to share memory across multiple [ShimmerInstance]s).
      */
-    fun writableMemory(): MutableMap<String, String> = backingMemory
+    fun writableMemory(): MemoryStore = memoryStore
 }
 
 @DslMarker
@@ -61,6 +67,12 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
     /** Set the adapter instance. */
     fun adapter(adapter: ApiAdapter): ShimmerBuilder<T> {
         this.adapter = adapter
+        return this
+    }
+
+    /** Set a routing adapter that chooses an adapter based on the prompt context. */
+    fun adapter(router: (PromptContext) -> ApiAdapter): ShimmerBuilder<T> {
+        this.adapter = com.adamhammer.shimmer.adapters.RoutingAdapter(router)
         return this
     }
 
@@ -134,11 +146,11 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
         val resolvedAdapter = adapter
             ?: throw ShimmerConfigurationException("Adapter must be provided. Use adapter(...) or setAdapterDirect(...)")
 
-        val memory: MutableMap<String, String> = ConcurrentHashMap()
+        val memoryStore = InMemoryStore()
 
         val shimmer = Shimmer(
             resolvedAdapter, contextBuilder, interceptors.toList(),
-            resiliencePolicy, toolProviders.toList(), memory, apiInterface,
+            resiliencePolicy, toolProviders.toList(), memoryStore, apiInterface,
             listeners.toList()
         )
 
@@ -148,7 +160,7 @@ class ShimmerBuilder<T : Any>(private val apiInterface: KClass<T>) {
             shimmer
         )
 
-        return ShimmerInstance(apiInterface.java.cast(proxyInstance), memory, apiInterface)
+        return ShimmerInstance(apiInterface.java.cast(proxyInstance), memoryStore, apiInterface)
     }
 }
 
@@ -161,7 +173,7 @@ class ResiliencePolicyBuilder {
     var retryDelayMs: Long = 1000
     var backoffMultiplier: Double = 2.0
     var timeoutMs: Long = 0
-    var resultValidator: ((Any) -> Boolean)? = null
+    var resultValidator: ((Any) -> Any)? = null
     var fallbackAdapter: ApiAdapter? = null
     var maxConcurrentRequests: Int = 0
     var maxRequestsPerMinute: Int = 0

@@ -4,12 +4,15 @@ import com.adamhammer.shimmer.annotations.Memorize
 import com.adamhammer.shimmer.interfaces.ApiAdapter
 import com.adamhammer.shimmer.interfaces.ContextBuilder
 import com.adamhammer.shimmer.interfaces.Interceptor
+import com.adamhammer.shimmer.interfaces.MemoryStore
 import com.adamhammer.shimmer.interfaces.RequestListener
 import com.adamhammer.shimmer.interfaces.ToolProvider
 import com.adamhammer.shimmer.model.*
 import com.adamhammer.shimmer.utils.toJsonString
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.future.future
 import kotlinx.coroutines.withContext
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
@@ -23,13 +26,22 @@ import kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.kotlinFunction
 
+/**
+ * The core dynamic proxy invocation handler for Shimmer interfaces.
+ *
+ * Intercepts method calls on the proxy interface, builds a [PromptContext] using the
+ * configured [ContextBuilder] and [Interceptor]s, and delegates the request to the
+ * configured [ApiAdapter] via the [ResilienceExecutor].
+ *
+ * Supports `suspend` functions, `Future<T>`, and `Flow<String>` return types.
+ */
 class Shimmer(
     private val adapter: ApiAdapter,
     private val contextBuilder: ContextBuilder,
     private val interceptors: List<Interceptor>,
     resilience: ResiliencePolicy,
     private val toolProviders: List<ToolProvider> = emptyList(),
-    private val memory: MutableMap<String, String>,
+    private val memoryStore: MemoryStore,
     private val klass: KClass<*>,
     listeners: List<RequestListener> = emptyList()
 ) : InvocationHandler {
@@ -75,10 +87,11 @@ class Shimmer(
         return invokeFuture(method, args)
     }
 
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     private fun invokeFuture(method: Method, args: Array<out Any>?): CompletableFuture<*> {
         val memorizeKey = method.getAnnotation(Memorize::class.java)?.label
 
-        return CompletableFuture.supplyAsync {
+        return GlobalScope.future(Dispatchers.IO) {
             val genericReturnType = method.genericReturnType
             if (genericReturnType is ParameterizedType) {
                 val actualType = genericReturnType.actualTypeArguments[0]
@@ -87,14 +100,13 @@ class Shimmer(
                 val kClass = clazz.kotlin
                 val context = buildContext(method, args?.toList(), kClass)
 
-                rateLimiter?.acquire()
+                rateLimiter?.acquireSuspend()
                 concurrencySemaphore?.acquire()
                 try {
                     val result = resilienceExecutor.execute(
-                        adapter, context, kClass, toolProviders,
-                        sleepStrategy = { ms -> Thread.sleep(ms) }
+                        adapter, context, kClass, toolProviders
                     )
-                    if (memorizeKey != null) memory[memorizeKey] = result.toJsonString()
+                    if (memorizeKey != null) memoryStore.put(memorizeKey, result.toJsonString())
                     result
                 } finally {
                     concurrencySemaphore?.release()
@@ -109,8 +121,11 @@ class Shimmer(
     }
 
     private fun invokeStreaming(method: Method, args: Array<out Any>?): Flow<String> {
-        val context = buildContext(method, args?.toList(), String::class)
-        return adapter.handleRequestStreaming(context, toolProviders)
+        val realArgs = args?.toList()
+        return kotlinx.coroutines.flow.flow {
+            val context = buildContext(method, realArgs, String::class)
+            adapter.handleRequestStreaming(context, toolProviders).collect { emit(it) }
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -131,28 +146,24 @@ class Shimmer(
             val context = buildContext(method, realArgs?.toList(), resultClass)
 
             rateLimiter?.acquireSuspend()
-            withContext(Dispatchers.IO) {
-                concurrencySemaphore?.acquire()
-                try {
-                    val result = resilienceExecutor.execute(
-                        adapter, context, resultClass, toolProviders,
-                        sleepStrategy = { ms -> Thread.sleep(ms) },
-                        rethrowCancellation = true
-                    )
-                    if (memorizeKey != null) memory[memorizeKey] = result.toJsonString()
-                    result
-                } finally {
-                    concurrencySemaphore?.release()
-                }
+            concurrencySemaphore?.acquire()
+            try {
+                val result = resilienceExecutor.execute(
+                    adapter, context, resultClass, toolProviders
+                )
+                if (memorizeKey != null) memoryStore.put(memorizeKey, result.toJsonString())
+                result
+            } finally {
+                concurrencySemaphore?.release()
             }
         }
 
         return block.startCoroutineUninterceptedOrReturn(continuation)
     }
 
-    private fun buildContext(method: Method, args: List<Any>?, resultClass: KClass<*>): PromptContext {
+    private suspend fun buildContext(method: Method, args: List<Any>?, resultClass: KClass<*>): PromptContext {
         val descriptor = MethodDescriptor.from(method, args, resultClass)
-        val request = ShimmerRequest(descriptor, memory.toMap(), resultClass)
+        val request = ShimmerRequest(descriptor, memoryStore.getAll(), resultClass)
         var context = contextBuilder.build(request)
         if (toolProviders.isNotEmpty()) {
             val allTools = toolProviders.flatMap { it.listTools() }

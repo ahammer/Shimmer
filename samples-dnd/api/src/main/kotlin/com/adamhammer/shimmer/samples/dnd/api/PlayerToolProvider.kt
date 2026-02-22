@@ -7,6 +7,7 @@ import com.adamhammer.shimmer.model.ToolResult
 import com.adamhammer.shimmer.samples.dnd.CharacterUtils
 import com.adamhammer.shimmer.samples.dnd.model.Character
 
+@Suppress("MaxLineLength")
 class PlayerToolProvider(
     private val characterProvider: () -> Character
 ) : ToolProvider {
@@ -24,7 +25,7 @@ class PlayerToolProvider(
         )
     )
 
-    override fun callTool(call: ToolCall): ToolResult {
+    override suspend fun callTool(call: ToolCall): ToolResult {
         val character = characterProvider()
         val content = when (call.toolName) {
             "inspect_inventory" -> {

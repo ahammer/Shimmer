@@ -63,8 +63,8 @@ class SuspendTest {
             .build()
 
         instance.api.store("input")
-        assertTrue(instance.memory.containsKey("suspend-stored"),
-            "Memory should contain 'suspend-stored'. Actual: ${instance.memory}")
+        assertTrue(instance.memoryStore.getAll().containsKey("suspend-stored"),
+            "Memory should contain 'suspend-stored'. Actual: ${instance.memoryStore.getAll()}")
     }
 
     @Test
