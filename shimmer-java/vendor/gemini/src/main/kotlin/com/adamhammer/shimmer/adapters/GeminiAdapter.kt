@@ -61,7 +61,7 @@ class GeminiAdapter(
     private val model: String = "gemini-2.5-pro",
     client: Client? = null,
     private val maxToolRounds: Int = 10,
-    private val imageModel: String = "imagen-3.0-generate-002",
+    private val imageModel: String = "imagen-4.0-generate-001",
     private val pricing: ModelPricing = ModelPricing()
 ) : ApiAdapter {
     private val logger = Logger.getLogger(GeminiAdapter::class.java.name)
@@ -400,16 +400,14 @@ class GeminiAdapter(
             .systemInstruction(Content.fromParts(Part.fromText(context.systemInstructions)))
             .candidateCount(1)
 
-        if (resultClass != String::class && resultClass != ImageResult::class) {
+        if (toolDefs.isNotEmpty()) {
+            val declarations = toolDefs.map { it.toGeminiFunctionDeclaration() }
+            builder.tools(listOf(Tool.builder().functionDeclarations(declarations).build()))
+        } else if (resultClass != String::class && resultClass != ImageResult::class) {
             val schema = resultClass.toJsonSchema()
             val geminiSchema = jsonSchemaToGeminiSchema(schema)
             builder.responseMimeType("application/json")
             builder.responseSchema(geminiSchema)
-        }
-
-        if (toolDefs.isNotEmpty()) {
-            val declarations = toolDefs.map { it.toGeminiFunctionDeclaration() }
-            builder.tools(listOf(Tool.builder().functionDeclarations(declarations).build()))
         }
 
         return builder.build()
