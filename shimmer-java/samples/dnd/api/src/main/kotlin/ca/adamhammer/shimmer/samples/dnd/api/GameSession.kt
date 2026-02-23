@@ -256,124 +256,20 @@ class GameSession(
         )
         if (agent != null) {
             try {
-                val observedStep = try {
-                    agent.invokeSuspend("observeSituation")
-                } catch (e: Exception) {
-                    AgentDispatcher.DispatchResult(
-                        methodName = "observeSituation",
-                        value = "Observation unavailable: ${e.message?.take(120) ?: "unknown error"}",
-                        isTerminal = false
-                    )
-                }
-                turnHistory += "${observedStep.methodName}: ${summarizeStepValue(observedStep.value)}"
-                turnStates[character.name] = TurnState(
-                    phase = "PLAN",
-                    stepsUsed = 0,
-                    stepsBudget = AGENT_TURN_BUDGET,
-                    recentSteps = turnHistory,
-                    previousRoundActions = prevActions
-                )
+                executeObservation(agent, character, turnHistory, prevActions)
+                val steppedAction = executeAgentSteps(agent, character, turnHistory, prevActions)
+                if (steppedAction != null) return steppedAction
+                return executeFallbackAction(agent, character, turnHistory, prevActions)
+            } catch (e: Exception) {
                 listener.onAgentStep(
                     characterName = character.name,
-                    stepNumber = 0,
-                    methodName = observedStep.methodName,
-                    details = summarizeStepValue(observedStep.value),
-                    terminal = false,
+                    stepNumber = -1,
+                    methodName = "error",
+                    details = "Agent failed: ${e.message?.take(120) ?: "unknown error"}; using default action.",
+                    terminal = true,
                     pointsSpent = 0,
-                    pointsRemaining = AGENT_TURN_BUDGET
-                )
-
-                val currentExcludedMethods = mutableSetOf("observeSituation")
-
-                for (stepIndex in 1..AGENT_TURN_BUDGET) {
-                    val stepResult = try {
-                        agent.stepDetailedSuspend(excludedMethods = currentExcludedMethods)
-                    } catch (e: Exception) {
-                        listener.onAgentStep(
-                            characterName = character.name,
-                            stepNumber = stepIndex,
-                            methodName = "recover",
-                            details = "Recovered from invalid step (${e.message?.take(120)}); forcing commitAction.",
-                            terminal = false,
-                            pointsSpent = stepIndex,
-                            pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
-                        )
-                        agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
-                    }
-                    turnHistory += "${stepResult.methodName}: ${summarizeStepValue(stepResult.value)}"
-                    currentExcludedMethods.add(stepResult.methodName)
-                    turnStates[character.name] = TurnState(
-                        phase = if (stepResult.isTerminal) "DONE" else "PLAN",
-                        stepsUsed = stepIndex,
-                        stepsBudget = AGENT_TURN_BUDGET,
-                        recentSteps = turnHistory,
-                        previousRoundActions = prevActions
-                    )
-                    listener.onAgentStep(
-                        characterName = character.name,
-                        stepNumber = stepIndex,
-                        methodName = stepResult.methodName,
-                        details = summarizeStepValue(stepResult.value),
-                        terminal = stepResult.isTerminal,
-                        pointsSpent = stepIndex,
-                        pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
-                    )
-
-                    if (!stepResult.isTerminal) {
-                        continue
-                    }
-
-                    val playerAction = when (val value = stepResult.value) {
-                        is PlayerAction -> value
-                        else -> PlayerAction(
-                            action = parseAiAction(value?.toString() ?: "", character.name),
-                            reasoning = "Parsed from non-structured terminal output."
-                        )
-                    }
-                    val actionText = playerAction.action.ifBlank { "I hold my position and reassess." }
-                    listener.onCharacterAction(character.name, actionText)
-                    if (playerAction.whisperTarget.isNotBlank() && playerAction.whisperMessage.isNotBlank()) {
-                        listener.onWhisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
-                        markdownTimeline += MarkdownEntry.Whisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
-                    }
-                    return playerAction
-                }
-
-                val fallbackTerminal = agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
-                turnHistory += "${fallbackTerminal.methodName}: ${summarizeStepValue(fallbackTerminal.value)}"
-                turnStates[character.name] = TurnState(
-                    phase = if (fallbackTerminal.isTerminal) "DONE" else "PLAN",
-                    stepsUsed = AGENT_TURN_BUDGET,
-                    stepsBudget = AGENT_TURN_BUDGET,
-                    recentSteps = turnHistory,
-                    previousRoundActions = prevActions
-                )
-                listener.onAgentStep(
-                    characterName = character.name,
-                    stepNumber = AGENT_TURN_BUDGET + 1,
-                    methodName = fallbackTerminal.methodName.ifBlank { "fallback" },
-                    details = summarizeStepValue(fallbackTerminal.value),
-                    terminal = fallbackTerminal.isTerminal,
-                    pointsSpent = AGENT_TURN_BUDGET,
                     pointsRemaining = 0
                 )
-
-                val playerAction = when (val value = fallbackTerminal.value) {
-                    is PlayerAction -> value
-                    else -> PlayerAction(
-                        action = parseAiAction(value?.toString() ?: "", character.name),
-                        reasoning = "Fallback after budget exhaustion."
-                    )
-                }
-                val actionText = playerAction.action.ifBlank { "I hold my position and reassess." }
-                listener.onCharacterAction(character.name, actionText)
-                if (playerAction.whisperTarget.isNotBlank() && playerAction.whisperMessage.isNotBlank()) {
-                    listener.onWhisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
-                    markdownTimeline += MarkdownEntry.Whisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
-                }
-                return playerAction
-            } catch (e: Exception) {
-                // fall through to default action
             }
         }
         turnStates[character.name] = TurnState(
@@ -389,6 +285,137 @@ class GameSession(
         )
         listener.onCharacterAction(character.name, fallback.action)
         return fallback
+    }
+
+    private suspend fun executeObservation(
+        agent: AutonomousAgent<PlayerAgentAPI>,
+        character: Character,
+        turnHistory: MutableList<String>,
+        prevActions: List<String>
+    ) {
+        val observedStep = try {
+            agent.invokeSuspend("observeSituation")
+        } catch (e: Exception) {
+            AgentDispatcher.DispatchResult(
+                methodName = "observeSituation",
+                value = "Observation unavailable: ${e.message?.take(120) ?: "unknown error"}",
+                isTerminal = false
+            )
+        }
+        turnHistory += "${observedStep.methodName}: ${summarizeStepValue(observedStep.value)}"
+        turnStates[character.name] = TurnState(
+            phase = "PLAN",
+            stepsUsed = 0,
+            stepsBudget = AGENT_TURN_BUDGET,
+            recentSteps = turnHistory,
+            previousRoundActions = prevActions
+        )
+        listener.onAgentStep(
+            characterName = character.name,
+            stepNumber = 0,
+            methodName = observedStep.methodName,
+            details = summarizeStepValue(observedStep.value),
+            terminal = false,
+            pointsSpent = 0,
+            pointsRemaining = AGENT_TURN_BUDGET
+        )
+    }
+
+    private suspend fun executeAgentSteps(
+        agent: AutonomousAgent<PlayerAgentAPI>,
+        character: Character,
+        turnHistory: MutableList<String>,
+        prevActions: List<String>
+    ): PlayerAction? {
+        val currentExcludedMethods = mutableSetOf("observeSituation")
+
+        for (stepIndex in 1..AGENT_TURN_BUDGET) {
+            val stepResult = try {
+                agent.stepDetailedSuspend(excludedMethods = currentExcludedMethods)
+            } catch (e: Exception) {
+                listener.onAgentStep(
+                    characterName = character.name,
+                    stepNumber = stepIndex,
+                    methodName = "recover",
+                    details = "Recovered from invalid step (${e.message?.take(120)}); forcing commitAction.",
+                    terminal = false,
+                    pointsSpent = stepIndex,
+                    pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
+                )
+                agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
+            }
+            turnHistory += "${stepResult.methodName}: ${summarizeStepValue(stepResult.value)}"
+            currentExcludedMethods.add(stepResult.methodName)
+            turnStates[character.name] = TurnState(
+                phase = if (stepResult.isTerminal) "DONE" else "PLAN",
+                stepsUsed = stepIndex,
+                stepsBudget = AGENT_TURN_BUDGET,
+                recentSteps = turnHistory,
+                previousRoundActions = prevActions
+            )
+            listener.onAgentStep(
+                characterName = character.name,
+                stepNumber = stepIndex,
+                methodName = stepResult.methodName,
+                details = summarizeStepValue(stepResult.value),
+                terminal = stepResult.isTerminal,
+                pointsSpent = stepIndex,
+                pointsRemaining = (AGENT_TURN_BUDGET - stepIndex).coerceAtLeast(0)
+            )
+
+            if (stepResult.isTerminal) {
+                return finalizeAction(character, stepResult, "Parsed from non-structured terminal output.")
+            }
+        }
+        return null
+    }
+
+    private suspend fun executeFallbackAction(
+        agent: AutonomousAgent<PlayerAgentAPI>,
+        character: Character,
+        turnHistory: MutableList<String>,
+        prevActions: List<String>
+    ): PlayerAction {
+        val fallbackTerminal = agent.invokeSuspend("commitAction", mapOf("recentActions" to prevActions.joinToString("\n")))
+        turnHistory += "${fallbackTerminal.methodName}: ${summarizeStepValue(fallbackTerminal.value)}"
+        turnStates[character.name] = TurnState(
+            phase = if (fallbackTerminal.isTerminal) "DONE" else "PLAN",
+            stepsUsed = AGENT_TURN_BUDGET,
+            stepsBudget = AGENT_TURN_BUDGET,
+            recentSteps = turnHistory,
+            previousRoundActions = prevActions
+        )
+        listener.onAgentStep(
+            characterName = character.name,
+            stepNumber = AGENT_TURN_BUDGET + 1,
+            methodName = fallbackTerminal.methodName.ifBlank { "fallback" },
+            details = summarizeStepValue(fallbackTerminal.value),
+            terminal = fallbackTerminal.isTerminal,
+            pointsSpent = AGENT_TURN_BUDGET,
+            pointsRemaining = 0
+        )
+        return finalizeAction(character, fallbackTerminal, "Fallback after budget exhaustion.")
+    }
+
+    private fun finalizeAction(
+        character: Character,
+        stepResult: AgentDispatcher.DispatchResult,
+        fallbackReasoning: String
+    ): PlayerAction {
+        val playerAction = when (val value = stepResult.value) {
+            is PlayerAction -> value
+            else -> PlayerAction(
+                action = parseAiAction(value?.toString() ?: "", character.name),
+                reasoning = fallbackReasoning
+            )
+        }
+        val actionText = playerAction.action.ifBlank { "I hold my position and reassess." }
+        listener.onCharacterAction(character.name, actionText)
+        if (playerAction.whisperTarget.isNotBlank() && playerAction.whisperMessage.isNotBlank()) {
+            listener.onWhisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
+            markdownTimeline += MarkdownEntry.Whisper(character.name, playerAction.whisperTarget, playerAction.whisperMessage)
+        }
+        return playerAction
     }
 
     private fun summarizeStepValue(value: Any?): String {

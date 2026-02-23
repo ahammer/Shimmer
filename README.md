@@ -46,7 +46,7 @@ val answer = instance.api.askQuestion("What is the meaning of life?")
 Shimmer is organized into a core library, vendor adapters, extensions, and samples. See the individual READMEs for deep dives into specific features.
 
 | Module | Description |
-|--------|-------------|
+| -------- | ------------- |
 | [`shimmer-core`](shimmer-java/core/README.md) | Core library — annotations, proxy, context pipeline, routing adapter, tool-calling abstractions, resilience. Zero AI-provider dependencies. |
 | [`shimmer-openai`](shimmer-java/vendor/openai/README.md) | OpenAI adapter — sends `PromptContext` to OpenAI with native tool-calling support. |
 | [`shimmer-gemini`](shimmer-java/vendor/gemini/README.md) | Google Gemini adapter — sends `PromptContext` to Gemini with native tool-calling support. |
@@ -174,6 +174,7 @@ graph TD
 The `samples-dnd` module is a complete text-based Dungeons & Dragons adventure demonstrating Shimmer's advanced AI patterns. It uses the AI as both the Dungeon Master (DM) and the Player Characters (PCs), showcasing how to build complex, multi-agent, stateful AI applications.
 
 **[Read the full D&D Case Study](shimmer-java/samples/dnd/README.md)** to learn how it uses, and **[browse example game runs](shimmer-java/samples/dnd/runs/)** to see real session outputs:
+
 - **Shimmer Agents** (`AutonomousAgent`) to simulate independent player decision-making.
 - **Interceptors** (`WorldStateInterceptor`) to dynamically inject real-time game state into the AI's system instructions.
 - **ResiliencePolicy** to enforce business logic on the AI's structured outputs (e.g., validating HP changes).
