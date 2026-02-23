@@ -173,7 +173,7 @@ graph TD
 
 The `samples-dnd` module is a complete text-based Dungeons & Dragons adventure demonstrating Shimmer's advanced AI patterns. It uses the AI as both the Dungeon Master (DM) and the Player Characters (PCs), showcasing how to build complex, multi-agent, stateful AI applications.
 
-**[Read the full D&D Case Study](shimmer-java/samples/dnd/README.md)** to learn how it uses:
+**[Read the full D&D Case Study](shimmer-java/samples/dnd/README.md)** to learn how it uses, and **[browse example game runs](shimmer-java/samples/dnd/runs/)** to see real session outputs:
 - **Shimmer Agents** (`AutonomousAgent`) to simulate independent player decision-making.
 - **Interceptors** (`WorldStateInterceptor`) to dynamically inject real-time game state into the AI's system instructions.
 - **ResiliencePolicy** to enforce business logic on the AI's structured outputs (e.g., validating HP changes).

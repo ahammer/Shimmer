@@ -5,7 +5,7 @@ plugins {
 }
 
 application {
-    mainClass = 'com.adamhammer.shimmer.samples.dnd.MainKt'
+    mainClass = 'ca.adamhammer.shimmer.samples.dnd.MainKt'
 }
 
 run {

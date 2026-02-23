@@ -1,0 +1,73 @@
+package ca.adamhammer.shimmer
+
+import ca.adamhammer.shimmer.model.TokenBucketRateLimiter
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
+
+class TokenBucketRateLimiterTest {
+
+    @Test
+    fun `allows requests up to the limit`() {
+        val limiter = TokenBucketRateLimiter(10)
+        // Should not block for 10 quick calls
+        repeat(10) { limiter.acquire() }
+    }
+
+    @Test
+    fun `blocks when limit is exceeded`() {
+        val limiter = TokenBucketRateLimiter(2)
+        limiter.acquire()
+        limiter.acquire()
+
+        // Third acquire should block (or at least wait)
+        val acquired = AtomicInteger(0)
+        val latch = CountDownLatch(1)
+
+        val t = thread {
+            latch.countDown()
+            limiter.acquire() // should block
+            acquired.incrementAndGet()
+        }
+
+        latch.await()
+        Thread.sleep(100) // give the thread time to attempt acquire
+        assertEquals(0, acquired.get(), "Third acquire should be blocked")
+
+        t.interrupt() // unblock the thread
+        t.join(1000)
+    }
+
+    @Test
+    fun `concurrent acquires respect the limit`() {
+        val limiter = TokenBucketRateLimiter(5)
+        val acquired = AtomicInteger(0)
+        val threads = (1..5).map {
+            thread {
+                limiter.acquire()
+                acquired.incrementAndGet()
+            }
+        }
+        threads.forEach { it.join(2000) }
+        assertEquals(5, acquired.get())
+    }
+
+    @Test
+    fun `blocked threads wake up after window expires`() {
+        // Use a rate limiter with 1 per second window
+        val limiter = TokenBucketRateLimiter(1, windowMs = 200)
+        limiter.acquire() // consume the one permitted token
+
+        val acquired = AtomicInteger(0)
+        val t = thread {
+            limiter.acquire() // should block then wake when window expires
+            acquired.incrementAndGet()
+        }
+
+        // Wait for the window to expire plus some slack
+        t.join(2000)
+        assertEquals(1, acquired.get(), "Blocked thread should have woken up after window expired")
+    }
+}

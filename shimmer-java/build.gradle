@@ -16,7 +16,7 @@ allprojects {
 }
 
 subprojects {
-    group = 'com.adamhammer.shimmer'
+    group = 'ca.adamhammer.shimmer'
     version = '1.0.0'
 
     // Apply jacoco and detekt to Kotlin subprojects
